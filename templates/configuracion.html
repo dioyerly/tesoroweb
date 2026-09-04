@@ -1,0 +1,269 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1 style="margin-bottom: 1.5rem;">Panel de Administración y Configuración</h1>
+
+<!-- NAVEGACIÓN POR PESTAÑAS -->
+<div style="display: flex; gap: 10px; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+    <button id="btn-tab-sociedades" class="btn-tab" onclick="cambiarPestana('tab-sociedades')">🏢 Sociedades y Bancos</button>
+    <button id="btn-tab-proveedores" class="btn-tab" onclick="cambiarPestana('tab-proveedores')">👥 Proveedores Registrados</button>
+    <button id="btn-tab-usuarios" class="btn-tab" onclick="cambiarPestana('tab-usuarios')">👔 Usuarios / Empleados y Permisos</button>
+</div>
+
+<!-- PESTAÑA 1: SOCIEDADES Y BANCOS -->
+<div id="tab-sociedades" class="tab-content" style="display: none;">
+    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1.5rem;">
+        <div class="card" style="padding: 1.5rem;">
+            <h3>Alta de Sociedad</h3>
+            <form action="/agregar_sociedad" method="POST">
+                <label style="color: var(--text-muted); font-size: 0.8rem;">Nombre Razón Social:</label>
+                <input type="text" name="nombre" required placeholder="Ej: Emprendimientos S.A." style="width: 100%; padding: 8px; margin-bottom: 10px; background: var(--bg-principal); color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+                
+                <label style="color: var(--text-muted); font-size: 0.8rem;">CUIT:</label>
+                <input type="text" name="cuit" required placeholder="30-12345678-9" style="width: 100%; padding: 8px; margin-bottom: 15px; background: var(--bg-principal); color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+                
+                <button type="submit" class="btn-neon" style="width: 100%;">+ Crear Sociedad</button>
+            </form>
+
+            <hr style="margin: 1.5rem 0; border-color: var(--border-color);">
+
+            <h3>Asociar Banco a Sociedad</h3>
+            <form action="/agregar_banco" method="POST">
+                <select name="sociedad_id" required style="width: 100%; padding: 8px; margin-bottom: 8px; background: var(--bg-principal); color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+                    <option value="">Seleccionar Sociedad...</option>
+                    {% for s in sociedades %}<option value="{{ s.id }}">{{ s.nombre }}</option>{% endfor %}
+                </select>
+                <input type="text" name="nombre_banco" placeholder="Banco (Ej: Galicia / Santander)" required style="width: 100%; padding: 8px; margin-bottom: 8px; background: var(--bg-principal); color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+                <input type="text" name="cbu" placeholder="CBU / ALIAS de la Cuenta" style="width: 100%; padding: 8px; margin-bottom: 12px; background: var(--bg-principal); color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+                <button type="submit" class="btn-neon" style="width: 100%; background: #17a2b8; color: white;">+ Guardar Banco</button>
+            </form>
+        </div>
+
+        <div class="card" style="padding: 1.5rem;">
+            <h3>Sociedades Activas y Cuentas Vinculadas</h3>
+            {% for item in sociedades_data %}
+            <div style="border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; margin-bottom: 1rem; background: rgba(255,255,255,0.02);">
+                <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                    <form action="/editar_sociedad/{{ item.sociedad.id }}" method="POST" style="display: flex; gap: 8px; align-items: center; flex-grow: 1;">
+                        <input type="text" name="nombre" value="{{ item.sociedad.nombre }}" style="font-weight: bold; padding: 4px; background: #0b132b; color: var(--neon-cyan); border: 1px solid var(--border-color); border-radius: 4px; flex-grow: 1;">
+                        <input type="text" name="cuit" value="{{ item.sociedad.cuit }}" style="padding: 4px; background: #0b132b; color: white; border: 1px solid var(--border-color); border-radius: 4px; width: 140px;">
+                        <button type="submit" class="btn-neon" style="padding: 4px 8px; font-size: 0.75rem;">Guardar</button>
+                    </form>
+                    <form action="/eliminar_sociedad/{{ item.sociedad.id }}" method="POST" onsubmit="return confirm('¿Confirma eliminar esta sociedad? Solo se puede borrar si no tiene pagos cargados.');">
+                        <button type="submit" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;" title="Eliminar sociedad">🗑️</button>
+                    </form>
+                </div>
+                <div style="padding-left: 10px; font-size: 0.85rem; color: var(--text-muted);">
+                    <strong>Bancos Asignados:</strong>
+                    {% if item.bancos %}
+                        {% for b in item.bancos %}<span style="color: white; margin-right: 8px;">• {{ b.nombre_banco }} ({{ b.cbu or 'Sin CBU' }})</span>{% endfor %}
+                    {% else %}
+                        <span>Sin bancos asignados</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- PESTAÑA 2: PROVEEDORES REGISTRADOS (MEJORADA) -->
+<div id="tab-proveedores" class="tab-content" style="display: none;">
+    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1.5rem;">
+        
+        <!-- COLUMNA IZQUIERDA: ALTA MANUAL E IMPORTACIÓN EXCEL -->
+        <div>
+            <!-- FORMULARIO 1: REGISTRO MANUAL -->
+            <div class="card" style="padding: 1.2rem; margin-bottom: 1.5rem;">
+                <h3 style="margin-bottom: 1rem;">➕ Registrar / Modificar Proveedor</h3>
+                <form action="/agregar_proveedor" method="POST">
+                    <label style="color: var(--text-muted); font-size: 0.8rem;">Razón Social / Nombre:</label>
+                    <input type="text" name="nombre" required placeholder="Ej: Distribuidora Norte S.R.L." style="width: 100%; padding: 8px; margin-bottom: 10px; background: var(--bg-principal); color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+                    
+                    <label style="color: var(--text-muted); font-size: 0.8rem;">CUIT (sin guiones o con guiones):</label>
+                    <input type="text" name="cuit" required placeholder="30123456789" style="width: 100%; padding: 8px; margin-bottom: 10px; background: var(--bg-principal); color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+
+                    <label style="color: var(--text-muted); font-size: 0.8rem;">CBU / Alias (Opcional):</label>
+                    <input type="text" name="cbu_alias" placeholder="ALIAS.BANCO.CUENTA" style="width: 100%; padding: 8px; margin-bottom: 15px; background: var(--bg-principal); color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+                    
+                    <button type="submit" class="btn-neon" style="width: 100%;">+ Crear o Actualizar Proveedor</button>
+                </form>
+            </div>
+
+            <!-- FORMULARIO 2: IMPORTACIÓN MASIVA EXCEL -->
+            <div class="card" style="padding: 1.2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <h3 style="margin: 0;">📊 Importación Masiva (Excel)</h3>
+                    <a href="/descargar_plantilla_proveedores" style="font-size: 0.75rem; color: var(--neon-cyan); text-decoration: underline;">Descargar Modelo</a>
+                </div>
+                <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 1rem;">
+                    Sube una planilla `.xlsx` o `.xls`. El sistema detectará automáticamente las columnas <strong>CUIT</strong>, <strong>NOMBRE</strong> y <strong>CBU/ALIAS</strong>.
+                </p>
+                <form action="/cargar_proveedores_excel" method="POST" enctype="multipart/form-data">
+                    <input type="file" name="file_excel" accept=".xlsx, .xls" required style="width: 100%; padding: 6px; margin-bottom: 12px; background: #0b132b; color: white; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem;">
+                    <button type="submit" class="btn-neon" style="width: 100%; background: #28a745; color: white;">⚡ Importar Lote de Proveedores</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- COLUMNA DERECHA: LISTADO Y EDICIÓN EN LÍNEA -->
+        <div class="card" style="padding: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3>👥 Padrón de Proveedores Registrados (<span id="contador_proveedores">{{ proveedores|length }}</span>)</h3>
+                <button type="button" onclick="eliminarProveedoresSeleccionados()" class="btn-neon" style="background: #dc3545; color: white; padding: 6px 12px; font-size: 0.8rem;">🗑️ Eliminar Seleccionados</button>
+            </div>
+
+            <input type="text" id="buscador_proveedores" onkeyup="filtrarProveedores()" placeholder="🔎 Buscar proveedor por nombre o CUIT..." style="width: 100%; padding: 8px 12px; margin-top: 10px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white; font-size: 0.85rem;">
+
+            <div style="max-height: 520px; overflow-y: auto; margin-top: 1rem;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--border-color); color: var(--neon-cyan); text-align: left; position: sticky; top: 0; background: var(--bg-card); z-index: 2;">
+                            <th style="padding: 8px; width: 30px;"><input type="checkbox" id="check_all_proveedores" onclick="toggleCheckboxesProveedores(this)"></th>
+                            <th style="padding: 8px;">Razón Social</th>
+                            <th style="padding: 8px; width: 130px;">CUIT</th>
+                            <th style="padding: 8px;">CBU / ALIAS</th>
+                            <th style="padding: 8px; text-align: center; width: 110px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    
+                    <tbody>
+                        {% for p in proveedores %}
+                        <tr class="fila-proveedor" style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="padding: 6px 4px;">
+                                <input type="checkbox" class="check_proveedor" value="{{ p.id }}">
+                            </td>
+                            <td style="padding: 6px 4px;">
+                                <input type="text" name="nombre" value="{{ p.nombre }}" required form="form_editar_prov_{{ p.id }}" style="width: 100%; padding: 4px 6px; background: #0b132b; color: white; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem;">
+                            </td>
+                            <td style="padding: 6px 4px;">
+                                <input type="text" name="cuit" value="{{ p.cuit }}" required form="form_editar_prov_{{ p.id }}" style="width: 100%; padding: 4px 6px; background: #0b132b; color: white; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem;">
+                            </td>
+                            <td style="padding: 6px 4px;">
+                                <input type="text" name="cbu_alias" value="{{ p.cbu_alias or '' }}" placeholder="Sin CBU" form="form_editar_prov_{{ p.id }}" style="width: 100%; padding: 4px 6px; background: #0b132b; color: white; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem;">
+                            </td>
+                            <td style="padding: 6px 4px; text-align: center;">
+                                <div style="display: flex; gap: 4px; justify-content: center; align-items: center;">
+                                    <button type="submit" form="form_editar_prov_{{ p.id }}" class="btn-neon" style="padding: 4px 8px; font-size: 0.75rem;" title="Guardar cambios">💾</button>
+
+                                    <form action="/eliminar_proveedor/{{ p.id }}" method="POST" onsubmit="return confirm('¿Confirma eliminar a este proveedor de la base de datos?');" style="display: inline;">
+                                        <button type="submit" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;" title="Eliminar proveedor">🗑️</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        <form id="form_editar_prov_{{ p.id }}" action="/editar_proveedor/{{ p.id }}" method="POST"></form>
+                        {% endfor %}
+                        {% if not proveedores %}
+                        <tr>
+                            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">No hay proveedores registrados. Utiliza el formulario o la carga masiva desde Excel.</td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- PESTAÑA 3: USUARIOS Y EMPLEADOS -->
+<div id="tab-usuarios" class="tab-content" style="display: none;">
+    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1.5rem;">
+        <div class="card" style="padding: 1.5rem;">
+            <h3>⚡ Alta de Usuario / Empleado</h3>
+            <form action="/agregar_usuario" method="POST">
+                <label style="color: var(--text-muted); font-size: 0.8rem;">Nombre Completo:</label>
+                <input type="text" name="nombre" required placeholder="Ej: Martin Gomez" style="width: 100%; padding: 8px; margin-bottom: 8px; background: var(--bg-principal); color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+
+                <label style="color: var(--text-muted); font-size: 0.8rem;">Email Corporativo:</label>
+                <input type="email" name="email" required placeholder="mgomez@empresa.com" style="width: 100%; padding: 8px; margin-bottom: 8px; background: var(--bg-principal); color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+
+                <label style="color: var(--text-muted); font-size: 0.8rem;">Puesto / Cargo:</label>
+                <input type="text" name="cargo" placeholder="Ej: Analista Sr. / Tesorero" style="width: 100%; padding: 8px; margin-bottom: 8px; background: var(--bg-principal); color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+
+                <label style="color: var(--text-muted); font-size: 0.8rem;">Nivel de Permisos (Rol):</label>
+                <select name="rol" style="width: 100%; padding: 8px; margin-bottom: 10px; background: var(--bg-principal); color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+                    <option value="Operador">Operador (Carga y Programación)</option>
+                    <option value="Aprobador">Aprobador (Autorizar Pagos)</option>
+                    <option value="Administrador">Administrador Total</option>
+                </select>
+
+                <label style="color: var(--text-muted); font-size: 0.8rem;">Sociedades Habilitadas:</label>
+                <div style="background: #0b132b; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); margin-bottom: 12px; max-height: 100px; overflow-y: auto;">
+                    <label style="display: block; color: var(--neon-cyan); font-size: 0.85rem;">
+                        <input type="checkbox" name="sociedades_permitidas" value="*" checked> All (Todas las Sociedades)
+                    </label>
+                    {% for s in sociedades %}
+                    <label style="display: block; color: white; font-size: 0.8rem; margin-top: 4px;">
+                        <input type="checkbox" name="sociedades_permitidas" value="{{ s.id }}"> {{ s.nombre }}
+                    </label>
+                    {% endfor %}
+                </div>
+
+                <button type="submit" class="btn-neon" style="width: 100%;">+ Registrar Usuario</button>
+            </form>
+        </div>
+
+        <div class="card" style="padding: 1.5rem;">
+            <h3>Nómina de Operadores y Permisos</h3>
+            {% for u in usuarios %}
+            <div style="border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; margin-bottom: 1rem; background: rgba(255,255,255,0.02);">
+                <form action="/editar_usuario/{{ u.id }}" method="POST">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                        <div>
+                            <label style="color: var(--text-muted); font-size: 0.75rem;">Nombre:</label>
+                            <input type="text" name="nombre" value="{{ u.nombre }}" required style="width: 100%; padding: 4px; background: #0b132b; color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+                        </div>
+                        <div>
+                            <label style="color: var(--text-muted); font-size: 0.75rem;">Email:</label>
+                            <input type="email" name="email" value="{{ u.email }}" required style="width: 100%; padding: 4px; background: #0b132b; color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                        <div>
+                            <label style="color: var(--text-muted); font-size: 0.75rem;">Cargo:</label>
+                            <input type="text" name="cargo" value="{{ u.cargo or '' }}" placeholder="Cargo" style="width: 100%; padding: 4px; background: #0b132b; color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+                        </div>
+                        <div>
+                            <label style="color: var(--text-muted); font-size: 0.75rem;">Rol Permiso:</label>
+                            <select name="rol" style="width: 100%; padding: 4px; background: #0b132b; color: var(--neon-cyan); border: 1px solid var(--border-color); border-radius: 4px;">
+                                <option value="Operador" {% if u.rol == 'Operador' %}selected{% endif %}>Operador</option>
+                                <option value="Aprobador" {% if u.rol == 'Aprobador' %}selected{% endif %}>Aprobador</option>
+                                <option value="Administrador" {% if u.rol == 'Administrador' %}selected{% endif %}>Administrador</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; gap: 4px; align-items: flex-end;">
+                            <button type="submit" class="btn-neon" style="padding: 5px 10px; font-size: 0.75rem; flex-grow: 1;">Guardar Cambios</button>
+                </form>
+                            <form action="/desvincular_usuario/{{ u.id }}" method="POST" onsubmit="return confirm('¿Confirmsa desvincular a este usuario del sistema?');" style="display: inline;">
+                                <button type="submit" class="btn-neon" style="background: #dc3545; color: white; padding: 5px 8px; font-size: 0.75rem;" title="Desvincular">❌</button>
+                            </form>
+                        </div>
+                    </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<style>
+.btn-tab {
+    background: transparent;
+    color: var(--text-muted);
+    border: none;
+    padding: 8px 16px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-radius: 4px;
+}
+.btn-tab.active {
+    background: var(--neon-cyan);
+    color: black;
+    font-weight: bold;
+}
+</style>
+
+<script src="{{ url_for('static', filename='js/configuracion.js') }}"></script>
+{% endblock %}

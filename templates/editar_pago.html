@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div style="max-width: 800px; margin: 0 auto;">
+    <h1 style="margin-bottom: 1.5rem;">Editar Pago/Factura</h1>
+
+    <div class="card" style="padding: 2rem;">
+        <form method="POST" style="display: flex; flex-direction: column; gap: 15px;">
+
+            <!-- SOCIEDAD -->
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Sociedad:</label>
+                <select name="sociedad_id" required style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+                    <option value="">Seleccionar...</option>
+                    {% for s in sociedades %}
+                        <option value="{{ s.id }}" {% if sociedad and sociedad.id == s.id %}selected{% endif %}>{{ s.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- PROVEEDOR -->
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Proveedor/Servicio:</label>
+                <select name="proveedor_id" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+                    <option value="">Sin proveedor</option>
+                    {% for p in proveedores %}
+                        <option value="{{ p.id }}" {% if proveedor and proveedor.id == p.id %}selected{% endif %}>{{ p.nombre }} ({{ p.cuit }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- BANCO ORIGEN -->
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Banco Origen:</label>
+                <select name="banco_origen_id" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+                    <option value="">Sin banco</option>
+                    {% for b in bancos %}
+                        <option value="{{ b.id }}" {% if banco and banco.id == b.id %}selected{% endif %}>{{ b.nombre_banco }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- N° FACTURA -->
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">N° Factura:</label>
+                <input type="text" name="nro_factura" value="{{ pago.nro_factura or '' }}" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white; box-sizing: border-box;">
+            </div>
+
+            <!-- N° OC/OP -->
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">N° OC/OP:</label>
+                <input type="text" name="nro_oc_op" value="{{ pago.nro_oc_op or '' }}" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white; box-sizing: border-box;">
+            </div>
+
+            <!-- MONTO -->
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Monto:</label>
+                <input type="number" name="monto" value="{{ pago.monto or 0 }}" step="0.01" required style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white; box-sizing: border-box;">
+            </div>
+
+            <!-- DESCRIPCIÓN -->
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Descripción:</label>
+                <textarea name="descripcion" rows="3" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white; box-sizing: border-box;">{{ pago.descripcion or '' }}</textarea>
+            </div>
+
+            <!-- TIPO DE GASTO -->
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Tipo de Gasto:</label>
+                <select name="tipo_gasto" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+                    <option value="proveedor" {% if pago.tipo_gasto == 'proveedor' %}selected{% endif %}>Proveedor</option>
+                    <option value="servicio" {% if pago.tipo_gasto == 'servicio' %}selected{% endif %}>Servicio</option>
+                </select>
+            </div>
+
+            <!-- FORMA DE PAGO -->
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Forma de Pago:</label>
+                <select name="forma_pago" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+                    <option value="Transferencia" {% if pago.forma_pago == 'Transferencia' %}selected{% endif %}>Transferencia</option>
+                    <option value="Cheques" {% if pago.forma_pago == 'Cheques' or pago.forma_pago == 'Cheques / eCheqs' %}selected{% endif %}>Cheques / eCheqs</option>
+                    <option value="Haberes" {% if pago.forma_pago == 'Haberes' %}selected{% endif %}>Haberes</option>
+                    <option value="Servicios" {% if pago.forma_pago == 'Servicios' or pago.forma_pago == 'Servicios / Pagos Directos' %}selected{% endif %}>Servicios / Pagos Directos</option>
+                </select>
+            </div>
+
+            <!-- N° CHEQUE -->
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">N° Cheque (si aplica):</label>
+                <input type="text" name="numero_cheque" value="{{ pago.numero_cheque or '' }}" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white; box-sizing: border-box;">
+            </div>
+
+            <!-- FECHA VENCIMIENTO -->
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Fecha Vencimiento:</label>
+                <input type="date" name="fecha_vencimiento" value="{{ pago.fecha_vencimiento.strftime('%Y-%m-%d') if pago.fecha_vencimiento else '' }}" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white; box-sizing: border-box;">
+            </div>
+
+            <!-- FECHA PAGO PROGRAMADA -->
+            <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Fecha Pago Programada:</label>
+                <input type="date" name="fecha_pago_programada" value="{{ pago.fecha_pago_programada.strftime('%Y-%m-%d') if pago.fecha_pago_programada else '' }}" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white; box-sizing: border-box;">
+            </div>
+
+            <!-- BOTONES -->
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button type="submit" class="btn-neon" style="background: #28a745; color: white; padding: 10px 20px; flex: 1;">Guardar Cambios</button>
+                <a href="/pagos" class="btn-neon" style="background: #6c757d; color: white; padding: 10px 20px; text-decoration: none; text-align: center; flex: 1;">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

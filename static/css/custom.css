@@ -1,0 +1,97 @@
+:root {
+    --bg-principal: #0b132b;
+    --bg-card: #1c2541;
+    --neon-blue: #00b4d8;
+    --neon-cyan: #48cae4;
+    --text-main: #ffffff;
+    --text-muted: #a0aec0;
+    --border-color: rgba(72, 202, 228, 0.2);
+}
+
+body {
+    background-color: var(--bg-principal);
+    color: var(--text-main);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.navbar {
+    background-color: var(--bg-card);
+    border-bottom: 1px solid var(--border-color);
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.brand {
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: var(--neon-cyan);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* .container = CONTENEDOR PRINCIPAL de toda la página
+   - max-width: 1500px; → Ancho MÁXIMO del contenedor (aumenta para más ancho, reduce para más estrecho)
+   - margin: 2rem auto; → Espacios arriba/abajo (2rem) y centrado automático (auto)
+   - padding: 0 1rem; → Espacios internos izquierda/derecha (1rem = 16px, aumenta para más margen) */
+.container {
+    max-width: 1500px;
+    margin: 5rem auto;
+    padding: 0 1rem;
+}
+
+.grid-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+/* .card = TARJETAS donde va la información (tablas, formularios, etc)
+   - background-color: var(--bg-card); → Fondo oscuro de la tarjeta
+   - border: 1px solid var(--border-color); → Borde gris de 1px
+   - border-radius: 12px; → Esquinas redondeadas (aumenta para más redondo)
+   - padding: 1.5rem; → Espacio INTERNO de la tarjeta (aumenta para más espacio dentro)
+   - box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3); → Sombra debajo de la tarjeta */
+.card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.card h3 {
+    margin-top: 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+}
+
+.card .metric {
+    font-size: 3rem;
+    font-weight: bold;
+    color: var(--neon-cyan);
+    margin: 0.5rem 0;
+}
+
+.btn-neon {
+    background: linear-gradient(135deg, var(--neon-blue), var(--neon-cyan));
+    color: #000;
+    font-weight: bold;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.3s ease;
+}
+
+.btn-neon:hover {
+    box-shadow: 0 0 15px rgba(72, 202, 228, 0.6);
+    transform: translateY(-2px);
+}

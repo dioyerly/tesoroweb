@@ -1,0 +1,225 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1 style="margin-bottom: 1.5rem;">Procesamiento e Ingreso de Pagos</h1>
+
+{% if step == 1 %}
+<!-- BLOQUE DE CARGA DUAL (2 COLUMNAS PARALELAS) -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+
+    <!-- OPCIÓN A: CON FACTURA PDF -->
+    <div class="card" style="text-align: center; padding: 2rem;">
+        <h3>Opción A: Subir Factura en PDF</h3>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;">Extrae automáticamente CUIT, monto y comprobante con IA.</p>
+        <form action="/cargar_factura" method="POST" enctype="multipart/form-data">
+            <input type="file" name="file" accept=".pdf" required style="margin-bottom: 1.5rem; color: white; width: 100%;">
+            <button type="submit" class="btn-neon" style="width: 100%;">Analizar PDF</button>
+        </form>
+    </div>
+
+    <!-- OPCIÓN B: CARGA MANUAL (SIN PDF) -->
+    <div class="card" style="padding: 2rem;">
+        <h3>Opción B: Carga Manual (Sin PDF)</h3>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Para servicios, VEPs, haberes o comprobantes sin PDF.</p>
+        <form action="/cargar_pago_manual" method="POST">
+            <!-- Selección de Sociedad -->
+            <label style="color: var(--text-muted); font-size: 0.8rem;">Sociedad:</label>
+            <select name="sociedad_id" required style="width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+                {% if sociedades|length != 1 %}<option value="">Seleccionar Sociedad...</option>{% endif %}
+                {% for s in sociedades %}<option value="{{ s.id }}" {% if sociedades|length == 1 %}selected{% endif %}>{{ s.nombre }}</option>{% endfor %}
+            </select>
+            <label style="color: var(--text-muted); font-size: 0.8rem;">Forma de Pago:</label>
+<select name="forma_pago" id="select_forma_pago_manual" onchange="toggleNumeroCheque('select_forma_pago_manual', 'campo_num_cheque_manual')" style="width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+    <option value="Transferencia" selected>Transferencia Bancaria</option>
+    <option value="Cheques / eCheqs">Cheques / eCheqs</option>
+    <option value="Efectivo">Efectivo</option>
+    <option value="VEP">VEP</option>
+    <option value="Tarjeta">Tarjeta</option>
+    <option value="Servicios / Pagos Directos">Servicios / Pagos Directos</option>
+</select>
+<div id="box_cheque_manual" style="display: none; background: rgba(255, 193, 7, 0.1); border: 1px solid #ffc107; padding: 8px; border-radius: 4px; margin-bottom: 8px;">
+    <label style="color: var(--text-muted); font-size: 0.75rem;">N° Cheque (Opcional - Completar después al pagar):</label>
+    <input type="text" name="numero_cheque" id="campo_num_cheque_manual" placeholder="Se puede dejar en blanco por ahora" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white; margin-top: 4px;">
+</div>
+
+
+            <!-- Selección de Banco -->
+            <label style="color: var(--text-muted); font-size: 0.8rem;">Banco de Salida:</label>
+            <select name="banco_origen_id" required style="width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+                {% if bancos|length != 1 %}<option value="">Seleccionar Banco...</option>{% endif %}
+                {% for b in bancos %}<option value="{{ b.id }}">{{ b.nombre_banco }}</option>{% endfor %}
+            </select>
+
+            <!-- Selección de Proveedor -->
+            <label style="color: var(--text-muted); font-size: 0.8rem;">Proveedor (Opcional):</label>
+            <select name="proveedor_id" style="width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+                <option value="">Seleccionar Proveedor...</option>
+                {% for prov in proveedores %}<option value="{{ prov.id }}">{{ prov.nombre }}</option>{% endfor %}
+            </select>
+
+            <!-- Campos adicionales -->
+            <input type="text" name="nro_factura" placeholder="N° Comprobante / VEP / Servicio" style="width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+            <input type="text" name="nro_oc_op" placeholder="N° OC/OP (Opcional)" style="width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+            <input type="number" step="0.01" name="monto" placeholder="Monto Total ($)" required style="width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+            
+            <label style="color: var(--text-muted); font-size: 0.8rem;">Descripción / Nota (Opcional):</label>
+            <input type="text" name="descripcion" placeholder="Ej: AySA Paternal / VEP Anticipo IIBB" style="width: 100%; padding: 7px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+
+            <label style="color: var(--text-muted); font-size: 0.8rem;">Fecha Programada de Pago:</label>
+            <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+                <button type="button" onclick="setFechaPago('fecha_pago_manual', 2)" class="btn-neon" style="padding: 5px 10px; font-size: 0.75rem; flex: 1;">📅 Próx. Martes</button>
+                <button type="button" onclick="setFechaPago('fecha_pago_manual', 4)" class="btn-neon" style="padding: 5px 10px; font-size: 0.75rem; flex: 1;">📅 Próx. Jueves</button>
+            </div>
+            <input type="date" id="fecha_pago_manual" name="fecha_pago_programada" required style="width: 100%; padding: 8px; margin-bottom: 12px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+            
+            <button type="submit" class="btn-neon" style="width: 100%;">Programar Pago Manual</button>
+        </form>
+    </div>
+
+</div>
+
+{% else %}
+<!-- PASO 2: PRE-VALIDACIÓN CON VISTA PREVIA DE PDF EN PANTALLA DIVIDIDA -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; max-width: 1300px; margin: 0 auto;">
+
+    <!-- COLUMNA IZQUIERDA: VISTA PREVIA DEL PDF -->
+    <div class="card" style="padding: 1rem; height: 650px; display: flex; flex-direction: column;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <h3 style="margin: 0; font-size: 1rem;">📄 Vista Previa del Comprobante</h3>
+            <a href="/cargar_factura" class="btn-neon" style="background: #dc3545; color: white; padding: 4px 10px; font-size: 0.8rem; text-decoration: none;">✖ Cancelar / Cargar Otro PDF</a>
+        </div>
+        <iframe src="/ver_pdf/{{ filename }}" style="width: 100%; height: 100%; border: 1px solid var(--border-color); border-radius: 6px; background: white;"></iframe>
+    </div>
+
+    <!-- COLUMNA DERECHA: TARJETA INFORMATIVA Y FORMULARIO -->
+    <div class="card" style="padding: 1.5rem; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0;">Paso 2: Pre-Validación del PDF</h3>
+            <a href="/cargar_factura" style="color: var(--text-muted); font-size: 0.85rem; text-decoration: underline;">Cancelar operación</a>
+        </div>
+        
+        <!-- TARJETA INFORMATIVA CON NOMBRE EDITABLE Y APRENDIZAJE/GUARDADO RÁPIDO -->
+        <div style="background: rgba(0, 180, 216, 0.1); border: 1px solid var(--neon-cyan); padding: 12px; border-radius: 8px; margin: 0.8rem 0; color: white;">
+            <div style="margin-bottom: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                    <span style="color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">Emisor / Servicio Detectado:</span>
+                    <div style="white-space: nowrap; flex-shrink: 0;" id="badge_estado_proveedor">
+                        {% if proveedor %}
+                            <span style="background: rgba(40, 167, 69, 0.2); color: #28a745; border: 1px solid #28a745; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; display: inline-block;">
+                                ✓ Registrado en Base
+                            </span>
+                        {% else %}
+                            <span style="background: rgba(255, 193, 7, 0.2); color: #ffc107; border: 1px solid #ffc107; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; display: inline-block;">
+                                ⚠️ Nuevo / No Guardado
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+                <input type="text" id="nombre_emisor_editable" value="{{ datos.razon_social }}" list="lista_proveedores_datalist" autocomplete="off" style="width: 100%; padding: 6px; margin-top: 2px; border-radius: 4px; border: 1px solid var(--neon-cyan); background: #0b132b; color: var(--neon-cyan); font-weight: bold; font-size: 0.95rem;">
+                <datalist id="lista_proveedores_datalist">
+                    {% for prov in proveedores %}
+                    <option value="{{ prov.nombre }}" data-id="{{ prov.id }}" data-cuit="{{ prov.cuit }}" data-cbu="{{ prov.cbu_alias or '' }}"></option>
+                    {% endfor %}
+                </datalist>
+                <label style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 6px;">CUIT del Emisor (corregilo si el escaneo lo tomó mal):</label>
+                <input type="text" id="cuit_emisor_editable" value="{{ datos.cuit or '' }}" placeholder="Sin CUIT detectado" style="width: 100%; padding: 6px; margin-top: 2px; border-radius: 4px; border: 1px solid var(--border-color); background: #0b132b; color: white; font-size: 0.85rem;">
+            </div>
+            
+            <!-- REGISTRO RÁPIDO PARA GUARDAR EL EMISOR Y SU CUIT -->
+            <div id="box_alta_rapida" style="border-top: 1px dashed rgba(255, 193, 7, 0.3); padding-top: 8px; display: flex; gap: 8px; align-items: center;">
+                <input type="text" id="cbu_rapido" value="{{ proveedor.cbu_alias if proveedor and proveedor.cbu_alias else '' }}" placeholder="CBU / ALIAS (Opcional si es Servicio)" style="padding: 6px; border-radius: 4px; border: 1px solid #ffc107; background: #0b132b; color: white; flex-grow: 1; font-size: 0.85rem;">
+                <button type="button" onclick="guardarProveedorRapido()" class="btn-neon" style="padding: 6px 10px; font-size: 0.8rem;">⚡ Guardar Emisor / Aprendizaje</button>
+            </div>
+        </div>
+
+       <!-- FORMULARIO DE CONFIRMACIÓN -->
+<form action="/confirmar_factura" method="POST" id="form_confirmar_pago">
+    <!-- Campos Ocultos Sincronizados -->
+    <input type="hidden" name="emisor_nombre" id="hidden_emisor_nombre" value="{{ proveedor.nombre if proveedor else datos.razon_social }}">
+    <input type="hidden" name="emisor_cuit" id="hidden_emisor_cuit" value="{{ proveedor.cuit if proveedor else datos.cuit }}">
+    <input type="hidden" name="cbu_alias" id="hidden_cbu_alias" value="{{ proveedor.cbu_alias if proveedor else '' }}">
+    <input type="hidden" id="input_proveedor_id" name="proveedor_id" value="{{ proveedor.id if proveedor else '' }}">
+
+    <!-- 1. Sociedad -->
+    <label style="color: var(--text-muted); font-size: 0.8rem;">1. Sociedad a la que aplica:</label>
+    <select name="sociedad_id" id="select_sociedad" onchange="cargarBancosPorSociedad()" required style="width: 100%; padding: 7px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+        {% if sociedades|length != 1 %}<option value="">Seleccionar Sociedad...</option>{% endif %}
+        {% for s in sociedades %}
+            <option value="{{ s.id }}" {% if sociedades|length == 1 %}selected{% endif %}>{{ s.nombre }}</option>
+        {% endfor %}
+    </select>
+
+    <!-- 2. Banco de Salida -->
+    <label style="color: var(--text-muted); font-size: 0.8rem;">2. Banco de Salida:</label>
+    <select name="banco_origen_id" id="select_banco" required style="width: 100%; padding: 7px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+        <option value="">Seleccionar Banco...</option>
+        {% for b in bancos %}
+            <option value="{{ b.id }}">{{ b.nombre_banco }}</option>
+        {% endfor %}
+    </select>
+
+    <!-- 3. Tipo de Gasto -->
+    <label style="color: var(--text-muted); font-size: 0.8rem;">3. Tipo de Gasto:</label>
+    <select name="tipo_gasto" id="select_tipo_gasto" style="width: 100%; padding: 7px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+        <option value="proveedor" {% if datos.tipo_gasto == 'proveedor' %}selected{% endif %}>Proveedor (Lote Masivo)</option>
+        <option value="servicio" {% if datos.tipo_gasto == 'servicio' %}selected{% endif %}>Servicio / VEP / Haber (Directo)</option>
+    </select>
+
+    <!-- 4. Forma de Pago -->
+    <label style="color: var(--text-muted); font-size: 0.8rem;">4. Forma de Pago:</label>
+    <select name="forma_pago" id="select_forma_pago" onchange="toggleNumeroCheque('select_forma_pago', 'box_cheque_confirmar')" style="width: 100%; padding: 7px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+        <option value="Transferencia" {% if not datos.forma_pago or datos.forma_pago == 'Transferencia' %}selected{% endif %}>Transferencia Bancaria</option>
+        <option value="Cheques / eCheqs" {% if datos.forma_pago == 'Cheques / eCheqs' %}selected{% endif %}>Cheques / eCheqs</option>
+        <option value="Efectivo" {% if datos.forma_pago == 'Efectivo' %}selected{% endif %}>Efectivo</option>
+        <option value="VEP" {% if datos.forma_pago == 'VEP' %}selected{% endif %}>VEP</option>
+        <option value="Tarjeta" {% if datos.forma_pago == 'Tarjeta' %}selected{% endif %}>Tarjeta</option>
+        <option value="Servicios / Pagos Directos" {% if datos.forma_pago == 'Servicios / Pagos Directos' %}selected{% endif %}>Servicios / Pagos Directos</option>
+    </select>
+    <div id="box_cheque_confirmar" style="display: none; background: rgba(255, 193, 7, 0.1); border: 1px solid #ffc107; padding: 8px; border-radius: 4px; margin-bottom: 8px;">
+        <label style="color: var(--text-muted); font-size: 0.75rem;">N° Cheque (Opcional - Completar después al pagar):</label>
+        <input type="text" name="numero_cheque" id="campo_num_cheque_confirmar" placeholder="Se puede dejar en blanco por ahora" style="width: 100%; padding: 7px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white; margin-top: 4px;">
+    </div>
+
+    <!-- Comprobante y Monto -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <div>
+            <label style="color: var(--text-muted); font-size: 0.8rem;">N° Comprobante:</label>
+            <input type="text" name="nro_factura" value="{{ datos.nro_factura }}" required style="width: 100%; padding: 7px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+        </div>
+        <div>
+            <label style="color: var(--text-muted); font-size: 0.8rem;">Monto Total ($):</label>
+            <input type="number" step="0.01" name="monto" value="{{ datos.monto }}" required style="width: 100%; padding: 7px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+        </div>
+    </div>
+
+    <label style="color: var(--text-muted); font-size: 0.8rem;">N° OC/OP (Opcional):</label>
+    <input type="text" name="nro_oc_op" placeholder="Orden de Compra / Orden de Pago" style="width: 100%; padding: 7px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+
+    <!-- Fechas -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <div>
+            <label style="color: var(--text-muted); font-size: 0.8rem;">Fecha Vencimiento:</label>
+            <input type="date" name="fecha_vencimiento" value="{{ datos.fecha_vencimiento or '' }}" style="width: 100%; padding: 7px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+        </div>
+        <div>
+            <label style="color: var(--text-muted); font-size: 0.8rem;">Fecha Programada Pago:</label>
+            <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+                <button type="button" onclick="setFechaPago('fecha_pago_confirmar', 2)" class="btn-neon" style="padding: 5px 8px; font-size: 0.7rem; flex: 1;">📅 Martes</button>
+                <button type="button" onclick="setFechaPago('fecha_pago_confirmar', 4)" class="btn-neon" style="padding: 5px 8px; font-size: 0.7rem; flex: 1;">📅 Jueves</button>
+            </div>
+            <input type="date" id="fecha_pago_confirmar" name="fecha_pago_programada" required style="width: 100%; padding: 7px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+        </div>
+    </div>
+
+    <!-- Descripción / Nota opcional -->
+    <label style="color: var(--text-muted); font-size: 0.8rem;">Descripción / Nota (Opcional):</label>
+    <input type="text" name="descripcion" placeholder="Ej: AySA Paternal / VEP Anticipo IIBB" style="width: 100%; padding: 7px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+
+    <button type="submit" class="btn-neon" style="width: 100%; margin-top: 0.8rem;">Confirmar y Programar Pago</button>
+</form>
+
+<!-- SCRIPT DE SINCRONIZACIÓN AUTOMÁTICA DE INPUTS Y VALIDACIÓN -->
+<script src="{{ url_for('static', filename='js/cargar_factura_confirmar.js') }}"></script>
+{% endif %}
+<script src="{{ url_for('static', filename='js/cargar_factura.js') }}"></script>
+{% endblock %}

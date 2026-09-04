@@ -1,0 +1,572 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<!-- TÍTULO PRINCIPAL -->
+<h1 style="margin-bottom: 1.5rem;">Conciliación de Pagos</h1>
+
+<!-- TARJETA DE CARGA = Formulario para subir archivo CSV/Excel del banco (COMPACTO)
+     - padding: 0.8rem → Espacio interno reducido
+     - margin-bottom: 0.8rem → Espacio abajo reducido
+     - margin-left/right: 1rem → Espacios a los lados (alineado con Pagos y Movimientos)
+     - width: calc(100% - 2rem) → Ancho alineado con Pagos y Movimientos -->
+<div class="card" style="padding: 0.8rem; margin-bottom: 0.8rem; margin-left: 1rem; margin-right: 1rem; width: calc(100% - 2rem) !important;">
+    <h3 style="margin-bottom: 0.8rem; font-size: 0.98rem;">📤 Subir resumen del banco</h3>
+    <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.5rem;">
+        Formatos: CSV o Excel (.csv, .xlsx, .xls). Detectamos automáticamente duplicados.
+    </p>
+
+    <form action="/procesar_conciliacion" method="POST" enctype="multipart/form-data" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <input type="file" name="archivo_banco" accept=".csv,.xlsx,.xls" required style="color: white; flex-grow: 1;">
+        <button type="submit" class="btn-neon" style="background: #00b4d8; color: black; padding: 0.6rem 1rem; font-size: 0.9rem;">Subir</button>
+    </form>
+</div>
+
+{% if not hay_movimientos %}
+<div class="card" style="padding: 1.5rem;">
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">Todavía no subiste ningún resumen bancario. Subí un archivo para empezar a ver la conciliación acá.</p>
+</div>
+{% else %}
+
+<!-- TARJETA DE PAGOS = Tabla con facturas pagadas que se necesitan conciliar
+     - padding: 1.5rem → Espacio interno (para alinear ancho con Movimientos del Banco)
+     - margin-bottom: 1.2rem → Espacio abajo
+     - margin-left/right: 1rem → Espacios a los lados (16px)
+     - width: calc(100% - 2rem) → Ancho MÁXIMO: 100% menos los márgenes (ocupa casi toda la pantalla)
+     MODIFICA ESTOS VALORES PARA CAMBIAR EL TAMAÑO Y POSICIÓN DE ESTA TARJETA -->
+<div class="card" style="padding: 1.5rem; margin-bottom: 1.2rem; margin-left: 1rem; margin-right: 1rem; width: calc(100% - 2rem) !important;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 10px;">
+        <h3 style="margin: 0;">📊 Estado de los Pagos Registrados</h3>
+        <div style="display: flex; gap: 8px;">
+            <form action="/reconciliar" method="POST">
+                <button type="submit" class="btn-neon" style="background: #ffc107; color: black;">🔄 Conciliar de nuevo</button>
+            </form>
+            <a href="/descargar_reporte_conciliacion" class="btn-neon" style="background: #28a745; color: white;">📥 Descargar reporte</a>
+        </div>
+    </div>
+
+    {% if resultados|length == 0 %}
+        <p style="color: var(--text-muted); font-size: 0.85rem;">No hay pagos registrados para conciliar.</p>
+    {% else %}
+        <div style="display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap;" id="filtros_pagos">
+            <button type="button" class="btn-filtro activo" data-estado="todos" onclick="filtrarTabla('tabla_pagos', 'filtros_pagos', this, 'todos')" style="padding: 5px 12px; font-size: 0.9rem; border-radius: 6px; border: 1px solid var(--border-color); background: transparent; color: white; cursor: pointer;">Todos ({{ resultados|length }})</button>
+            <button type="button" class="btn-filtro" data-estado="conciliado" onclick="filtrarTabla('tabla_pagos', 'filtros_pagos', this, 'conciliado')" style="padding: 5px 12px; font-size: 0.9rem; border-radius: 6px; border: 1px solid #28a745; background: rgba(40,167,69,0.1); color: #28a745; cursor: pointer;">Conciliados ({{ resultados|selectattr('estado', 'equalto', 'conciliado')|list|length }})</button>
+            <button type="button" class="btn-filtro" data-estado="diferencia" onclick="filtrarTabla('tabla_pagos', 'filtros_pagos', this, 'diferencia')" style="padding: 5px 12px; font-size: 0.9rem; border-radius: 6px; border: 1px solid #ffc107; background: rgba(255,193,7,0.1); color: #ffc107; cursor: pointer;">Diferencias ({{ resultados|selectattr('estado', 'equalto', 'diferencia')|list|length }})</button>
+            <button type="button" class="btn-filtro" data-estado="sin_conciliar" onclick="filtrarTabla('tabla_pagos', 'filtros_pagos', this, 'sin_conciliar')" style="padding: 5px 12px; font-size: 0.9rem; border-radius: 6px; border: 1px solid #dc3545; background: rgba(220,53,69,0.1); color: #dc3545; cursor: pointer;">Sin conciliar ({{ resultados|selectattr('estado', 'equalto', 'sin_conciliar')|list|length }})</button>
+        </div>
+
+        <div style="max-height: 520px; overflow-y: auto; overflow-x: hidden;">
+            <table id="tabla_pagos" style="width: 100%; border-collapse: collapse; text-align: left;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border-color); color: var(--neon-cyan);">
+                        <th style="padding: 10px;">Proveedor</th>
+                        <th style="padding: 10px;">Monto Pago</th>
+                        <th style="padding: 10px;">Fecha Pago</th>
+                        <th style="padding: 10px;">Forma de Pago</th>
+                        <th style="padding: 10px;">Monto Banco</th>
+                        <th style="padding: 10px;">Fecha Banco</th>
+                        <th style="padding: 10px;">Descripción Banco</th>
+                        <th style="padding: 10px; text-align: center;">Estado</th>
+                        <th style="padding: 10px; text-align: center;">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in resultados %}
+                    <tr data-estado="{{ r.estado }}" style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <td style="padding: 8px 10px; color: white;">{{ r.proveedor }}</td>
+                        <td style="padding: 8px 10px; color: #28a745; font-weight: bold;">$ {{ "%.2f"|format(r.monto_pago) }}</td>
+                        <td style="padding: 8px 10px;">{{ r.fecha_pago }}</td>
+                        <td style="padding: 8px 10px; color: var(--text-muted); font-size: 0.8rem;">{{ r.forma_pago }}{% if r.numero_cheque %} (N° {{ r.numero_cheque }}){% endif %}</td>
+                        <td style="padding: 8px 10px;">{{ "$ %.2f"|format(r.monto_banco) if r.monto_banco is not none else '-' }}</td>
+                        <td style="padding: 8px 10px;">{{ r.fecha_banco }}</td>
+                        <td style="padding: 8px 10px; color: var(--text-muted); font-size: 0.85rem; max-width: 260px;">{{ r.descripcion_banco }}</td>
+                        <td style="padding: 8px 10px; text-align: center;">
+                            {% if r.estado == 'conciliado' %}
+                                <span style="background: rgba(40, 167, 69, 0.2); color: #28a745; border: 1px solid #28a745; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; white-space: nowrap;">✅ Conciliado</span>
+                            {% elif r.estado == 'diferencia' %}
+                                <span style="background: rgba(255, 193, 7, 0.2); color: #ffc107; border: 1px solid #ffc107; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; white-space: nowrap;">🟡 Diferencia</span>
+                            {% else %}
+                                <span style="background: rgba(220, 53, 69, 0.2); color: #dc3545; border: 1px solid #dc3545; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; white-space: nowrap;">❌ Sin Conciliar</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 8px 10px; text-align: center;">
+                            {% if r.estado == 'diferencia' %}
+                                <div style="display: flex; gap: 3px; justify-content: center;">
+                                    <button type="button" onclick="aceptarDiferencia({{ r.pago_id }})" class="btn-neon" style="background: #28a745; color: white; padding: 3px 6px; font-size: 0.7rem; border-radius: 3px; cursor: pointer; border: none;" title="Sí, es este pago - Conciliar en verde">✓ Sí</button>
+                                    <button type="button" onclick="rechazarDiferencia({{ r.pago_id }})" class="btn-neon" style="background: #dc3545; color: white; padding: 3px 6px; font-size: 0.7rem; border-radius: 3px; cursor: pointer; border: none;" title="No, es otro - Dejar libres">✗ No</button>
+                                </div>
+                            {% elif r.estado == 'sin_conciliar' and movimientos_sin_conciliar %}
+                                <div style="display: flex; flex-direction: column; gap: 3px; font-size: 0.65rem;">
+                                    <div style="display: flex; gap: 3px; align-items: center;">
+                                        <select id="mov_select_{{ r.pago_id }}" style="padding: 3px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white; max-width: 160px; font-size: 0.7rem;">
+                                            <option value="">Movimiento...</option>
+                                            {% for m in movimientos_sin_conciliar %}
+                                            <option value="{{ m.id }}">{{ m.fecha }} — Disponible: $ {{ "%.2f"|format(m.saldo_disponible) }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="button" onclick='vincularMovimiento({{ r.pago_id }})' class="btn-neon" style="padding: 3px 6px; font-size: 0.7rem; background: #00b4d8; color: black;">Vincular</button>
+                                    </div>
+                                    {% if r.forma_pago and 'heque' in r.forma_pago %}
+                                    <div style="display: flex; gap: 3px; align-items: center;">
+                                        <input type="text" id="cheque_input_{{ r.pago_id }}" placeholder="N° Cheque" style="padding: 3px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white; width: 70px; font-size: 0.7rem;">
+                                        <button type="button" onclick='conciliarPorCheque({{ r.pago_id }}, {{ r.monto_pago }})' class="btn-neon" style="padding: 3px 6px; font-size: 0.7rem; background: #ffc107; color: black;">🔍 Cheque</button>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <span style="color: var(--text-muted); font-size: 0.75rem;">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+</div>
+
+<!-- TARJETA DE MOVIMIENTOS BANCARIOS = Tabla con todos los movimientos del banco cargados
+     - padding: 1.5rem → Espacio interno (contenido con margen)
+     - margin-left/right: 1rem → Espacios a los lados
+     - width: calc(100% - 2rem) → Ancho máximo: 100% menos los márgenes
+     - max-height: 520px en el div interior → Altura máxima antes de scrollbar (ver abajo)
+     MODIFICA ESTOS VALORES PARA CAMBIAR EL TAMAÑO Y POSICIÓN DE ESTA TARJETA -->
+<div class="card" style="padding: 1.5rem; margin-left: 1rem; margin-right: 1rem; width: calc(100% - 2rem) !important;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 style="margin: 0;">🏦 Movimientos del Banco Cargados ({{ movimientos|length }})</h3>
+    </div>
+    <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: -6px; margin-bottom: 1rem;">
+        Todos los movimientos que subiste hasta ahora, de cualquier resumen. Si un pago y un movimiento son en realidad el mismo (diferencia de centavos, nombre distinto, etc.), podés vincularlos a mano.
+    </p>
+
+    <div style="display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap;" id="filtros_movimientos">
+        <button type="button" class="btn-filtro activo" onclick="filtrarTabla('tabla_movimientos', 'filtros_movimientos', this, 'todos')" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px; border: 1px solid var(--border-color); background: transparent; color: white; cursor: pointer;">Todos ({{ movimientos|length }})</button>
+        <button type="button" class="btn-filtro" onclick="filtrarTabla('tabla_movimientos', 'filtros_movimientos', this, 'conciliado')" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px; border: 1px solid #28a745; background: rgba(40,167,69,0.1); color: #28a745; cursor: pointer;">✅ Conciliados ({{ movimientos|selectattr('estado', 'equalto', 'conciliado')|list|length }})</button>
+        <button type="button" class="btn-filtro" onclick="filtrarTabla('tabla_movimientos', 'filtros_movimientos', this, 'diferencia')" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px; border: 1px solid #ffc107; background: rgba(255,193,7,0.1); color: #ffc107; cursor: pointer;">🟡 Diferencias ({{ movimientos|selectattr('estado', 'equalto', 'diferencia')|list|length }})</button>
+        <button type="button" class="btn-filtro" onclick="filtrarTabla('tabla_movimientos', 'filtros_movimientos', this, 'sin_conciliar')" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px; border: 1px solid #dc3545; background: rgba(220,53,69,0.1); color: #dc3545; cursor: pointer;">❌ Sin conciliar ({{ movimientos|selectattr('estado', 'equalto', 'sin_conciliar')|list|length }})</button>
+        <button type="button" class="btn-filtro" onclick="filtrarTabla('tabla_movimientos', 'filtros_movimientos', this, 'ingreso')" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px; border: 1px solid var(--neon-cyan); background: rgba(0,180,216,0.1); color: var(--neon-cyan); cursor: pointer;">💰 Ingresos ({{ movimientos|selectattr('estado', 'equalto', 'ingreso')|list|length }})</button>
+        <button type="button" class="btn-filtro" onclick="filtrarTabla('tabla_movimientos', 'filtros_movimientos', this, 'impuesto_gasto')" style="padding: 5px 12px; font-size: 0.8rem; border-radius: 6px; border: 1px solid var(--text-muted); background: rgba(160,174,192,0.1); color: var(--text-muted); cursor: pointer;">🧾 Impuestos/Gastos ({{ movimientos|selectattr('estado', 'equalto', 'impuesto_gasto')|list|length }})</button>
+    </div>
+
+    <div style="max-height: 520px; overflow-y: auto;">
+        <table id="tabla_movimientos" style="width: 100%; border-collapse: collapse; text-align: left;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border-color); color: var(--neon-cyan); position: sticky; top: 0; background: var(--bg-card);">
+                    <th style="padding: 10px;">Fecha</th>
+                    <th style="padding: 10px;">Tipo</th>
+                    <th style="padding: 10px;">Monto</th>
+                    <th style="padding: 10px;">Descripción</th>
+                    <th style="padding: 10px; text-align: center;">Estado</th>
+                    <th style="padding: 10px; text-align: center;">Conciliar a mano</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in movimientos %}
+                <tr data-estado="{{ m.estado }}" style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <td style="padding: 8px 10px; white-space: nowrap;">{{ m.fecha }}</td>
+                    <td style="padding: 8px 10px;">
+                        {% if m.tipo == 'debito' %}
+                            <span style="color: #dc3545;">⬇ Egreso</span>
+                        {% else %}
+                            <span style="color: #28a745;">⬆ Ingreso</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 8px 10px; font-weight: bold; color: {{ '#dc3545' if m.tipo == 'debito' else '#28a745' }};">$ {{ "%.2f"|format(m.monto) }}</td>
+                    <td style="padding: 8px 10px; color: var(--text-muted); font-size: 0.85rem; max-width: 380px;">{{ m.descripcion }}</td>
+                    <td style="padding: 8px 10px; text-align: center;">
+                        {% if m.estado == 'conciliado' %}
+                            <span style="background: rgba(40, 167, 69, 0.2); color: #28a745; border: 1px solid #28a745; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; white-space: nowrap;">✅ Conciliado{{ ' (manual)' if m.conciliado_manual else '' }}</span>
+                        {% elif m.estado == 'diferencia' %}
+                            <span style="background: rgba(255, 193, 7, 0.2); color: #ffc107; border: 1px solid #ffc107; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; white-space: nowrap;">🟡 Diferencia</span>
+                        {% elif m.estado == 'ingreso' %}
+                            <span style="background: rgba(0, 180, 216, 0.2); color: var(--neon-cyan); border: 1px solid var(--neon-cyan); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; white-space: nowrap;">💰 Ingreso</span>
+                        {% elif m.estado == 'impuesto_gasto' %}
+                            <span style="background: rgba(160, 174, 192, 0.15); color: var(--text-muted); border: 1px solid var(--text-muted); padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; white-space: nowrap;">🧾 Impuesto/Gasto</span>
+                        {% else %}
+                            <span style="background: rgba(220, 53, 69, 0.2); color: #dc3545; border: 1px solid #dc3545; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; white-space: nowrap;">❌ Sin Conciliar</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 8px 10px; text-align: center;">
+                        {% if m.conciliado_manual %}
+                            <button type="button" onclick='deshacerManual({{ m.id }})' class="btn-neon" style="background: #dc3545; color: white; padding: 3px 8px; font-size: 0.7rem;">↩ Deshacer</button>
+                        {% elif m.sugerencias %}
+                            <div style="display: flex; flex-direction: column; gap: 3px; align-items: stretch; text-align: left;">
+                                {% for s in m.sugerencias %}
+                                <button type="button" onclick='conciliarManualDirecto({{ m.id }}, {{ s.pago_id }})' class="btn-neon" style="padding: 3px 8px; font-size: 0.7rem; text-align: left; white-space: nowrap; background: {{ 'rgba(40,167,69,0.15)' if (s.monto_ok and s.fecha_ok) else 'var(--bg-principal)' }}; color: white;" title="Monto {{ '✓' if s.monto_ok else '✗' }} · Fecha {{ '✓' if s.fecha_ok else '✗' }} · Nombre {{ '✓' if s.nombre_ok else '✗' }}">
+                                    {{ '✅' if (s.monto_ok and s.fecha_ok) else '🔹' }} {{ s.proveedor }} — $ {{ "%.2f"|format(s.monto) }} — {{ s.fecha }}
+                                </button>
+                                {% endfor %}
+                            </div>
+                        {% elif m.tipo == 'debito' and m.estado in ('diferencia', 'sin_conciliar') and pagos_disponibles %}
+                            <div style="display: flex; flex-direction: column; gap: 4px; align-items: stretch;">
+                                <div style="display: flex; gap: 4px; align-items: center;">
+                                    <select id="select_pago_{{ m.id }}" style="padding: 3px; font-size: 0.7rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white; flex: 1; max-width: 140px;">
+                                        <option value="">Vincular a pago...</option>
+                                        {% for p in pagos_disponibles %}
+                                        <option value="{{ p.id }}">{{ p.etiqueta }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="button" onclick='conciliarManual({{ m.id }})' class="btn-neon" style="padding: 3px 8px; font-size: 0.7rem; white-space: nowrap;">✔ Todo</button>
+                                </div>
+                                <div style="display: flex; gap: 4px; align-items: center; font-size: 0.65rem;">
+                                    <input type="number" id="monto_split_{{ m.id }}" placeholder="Monto" value="{{ m.saldo_disponible }}" step="0.01" max="{{ m.saldo_disponible }}" style="padding: 3px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white; width: 60px;">
+                                    <button type="button" onclick='conciliarConSplit({{ m.id }}, {{ m.saldo_disponible }})' class="btn-neon" style="padding: 3px 8px; font-size: 0.7rem; white-space: nowrap; background: #00b4d8; color: black;">📊 Split</button>
+                                </div>
+                            </div>
+                        {% else %}
+                            <span style="color: var(--text-muted); font-size: 0.75rem;">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+.btn-filtro.activo {
+    background: var(--neon-cyan) !important;
+    color: black !important;
+    font-weight: bold;
+}
+.notificacion {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: 4px;
+    color: white;
+    font-size: 0.9rem;
+    z-index: 9999;
+    animation: slideIn 0.3s ease-in-out;
+}
+.notificacion.exito {
+    background: #28a745;
+}
+.notificacion.error {
+    background: #dc3545;
+}
+@keyframes slideIn {
+    from { transform: translateX(400px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+@keyframes slideOut {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(400px); opacity: 0; }
+}
+</style>
+
+<script>
+function filtrarTabla(tablaId, filtrosId, boton, estado) {
+    document.querySelectorAll(`#${filtrosId} .btn-filtro`).forEach(b => b.classList.remove('activo'));
+    boton.classList.add('activo');
+
+    document.querySelectorAll(`#${tablaId} tbody tr`).forEach(fila => {
+        fila.style.display = (estado === 'todos' || fila.dataset.estado === estado) ? '' : 'none';
+    });
+}
+
+function conciliarManualDirecto(movimientoId, pagoId) {
+    fetch('/conciliar_manual', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({movimiento_id: movimientoId, pago_id: pagoId})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'ok') {
+            window.location.reload();
+        } else {
+            alert('Error al conciliar: ' + (data.message || 'Error desconocido'));
+        }
+    });
+}
+
+function conciliarManual(movimientoId) {
+    const select = document.getElementById(`select_pago_${movimientoId}`);
+    const pagoId = select.value;
+    if (!pagoId) {
+        alert('Elegí a qué pago corresponde este movimiento.');
+        return;
+    }
+
+    fetch('/conciliar_manual', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({movimiento_id: movimientoId, pago_id: pagoId})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'ok') {
+            window.location.reload();
+        } else {
+            alert('Error al conciliar: ' + (data.message || 'Error desconocido'));
+        }
+    });
+}
+
+function deshacerManual(movimientoId) {
+    fetch(`/deshacer_conciliacion_manual/${movimientoId}`, {method: 'POST'})
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'ok') {
+            window.location.reload();
+        }
+    });
+}
+
+function mostrarNotificacion(mensaje, tipo = 'exito') {
+    const notif = document.createElement('div');
+    notif.className = 'notificacion ' + tipo;
+    notif.textContent = mensaje;
+    document.body.appendChild(notif);
+    setTimeout(() => {
+        notif.style.animation = 'slideOut 0.3s ease-in-out forwards';
+        setTimeout(() => notif.remove(), 300);
+    }, 3000);
+}
+
+function pedirConfirmacion(mensaje, callback) {
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+    `;
+
+    const contenido = document.createElement('div');
+    contenido.style.cssText = `
+        background: var(--bg-card);
+        padding: 20px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        max-width: 300px;
+        text-align: center;
+        color: white;
+    `;
+
+    contenido.innerHTML = `
+        <p style="margin-bottom: 15px; font-size: 0.9rem;">${mensaje}</p>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+            <button type="button" class="btn-neon" style="background: #28a745; color: white; padding: 5px 15px; border: none; cursor: pointer; border-radius: 4px;">✓ Sí</button>
+            <button type="button" class="btn-neon" style="background: #dc3545; color: white; padding: 5px 15px; border: none; cursor: pointer; border-radius: 4px;">✕ No</button>
+        </div>
+    `;
+
+    const botones = contenido.querySelectorAll('button');
+    botones[0].onclick = () => {
+        modal.remove();
+        callback(true);
+    };
+    botones[1].onclick = () => {
+        modal.remove();
+        callback(false);
+    };
+
+    modal.appendChild(contenido);
+    document.body.appendChild(modal);
+}
+
+function aceptarDiferencia(pagoId) {
+    pedirConfirmacion('¿Confirmas que este es el pago correcto? Se conciliará en VERDE.', (confirma) => {
+        if (!confirma) return;
+        fetch('/aceptar_diferencia', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({pago_id: pagoId})
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                mostrarNotificacion('Pago conciliado en VERDE correctamente.', 'exito');
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                mostrarNotificacion('Error: ' + (data.message || 'Error desconocido'), 'error');
+            }
+        });
+    });
+}
+
+function rechazarDiferencia(pagoId) {
+    pedirConfirmacion('¿Confirmas que NO es este pago? Quedará libre para imputar a otro movimiento.', (confirma) => {
+        if (!confirma) return;
+        fetch('/rechazar_diferencia', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({pago_id: pagoId})
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                mostrarNotificacion('Pago desvinculado correctamente.', 'exito');
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                mostrarNotificacion('Error: ' + (data.message || 'Error desconocido'), 'error');
+            }
+        });
+    });
+}
+
+function conciliarConSplit(movimientoId, montoTotal) {
+    const selectPago = document.getElementById(`select_pago_${movimientoId}`);
+    const inputMonto = document.getElementById(`monto_split_${movimientoId}`);
+    const pagoId = selectPago.value;
+    const montoAsignado = parseFloat(inputMonto.value || 0);
+
+    if (!pagoId) {
+        mostrarNotificacion('Elegí a qué pago corresponde este movimiento.', 'error');
+        return;
+    }
+
+    if (montoAsignado <= 0 || montoAsignado > montoTotal) {
+        mostrarNotificacion(`Monto debe ser entre 0 y ${montoTotal.toFixed(2)}.`, 'error');
+        return;
+    }
+
+    pedirConfirmacion(`¿Asignar $ ${montoAsignado.toFixed(2)} a este pago? Quedará $ ${(montoTotal - montoAsignado).toFixed(2)} libre.`, (confirma) => {
+        if (!confirma) return;
+        fetch('/conciliar_con_split', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                movimiento_id: movimientoId,
+                pago_id: pagoId,
+                monto_asignado: montoAsignado
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                mostrarNotificacion(`Split registrado. Saldo restante: $ ${data.saldo_restante.toFixed(2)}`, 'exito');
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                mostrarNotificacion('Error: ' + (data.message || 'Error desconocido'), 'error');
+            }
+        });
+    });
+}
+
+function conciliarPorCheque(pagoId, montoPago) {
+    const inputCheque = document.getElementById(`cheque_input_${pagoId}`);
+    const numeroCheque = inputCheque.value.trim();
+
+    if (!numeroCheque) {
+        mostrarNotificacion('Ingresá el número de cheque.', 'error');
+        return;
+    }
+
+    fetch('/buscar_movimiento_por_cheque', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({numero_cheque: numeroCheque, monto: montoPago})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'ok' && data.movimiento_id) {
+            if (confirm(`¿Conciliar factura de $ ${montoPago.toFixed(2)} con cheque N° ${numeroCheque}?`)) {
+                fetch('/conciliar_manual', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        movimiento_id: data.movimiento_id,
+                        pago_id: pagoId
+                    })
+                })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.status === 'ok') {
+                        mostrarNotificacion('Cheque conciliado correctamente.', 'exito');
+                        setTimeout(() => window.location.reload(), 1000);
+                    } else {
+                        mostrarNotificacion('Error: ' + (result.message || 'Error desconocido'), 'error');
+                    }
+                });
+            }
+        } else {
+            mostrarNotificacion('No encontré cheque N° ' + numeroCheque + ' sin conciliar.', 'error');
+        }
+    });
+}
+
+function vincularMovimiento(pagoId) {
+    const select = document.getElementById(`mov_select_${pagoId}`);
+    const movimientoId = select.value;
+
+    if (!movimientoId) {
+        mostrarNotificacion('Elegí un movimiento del banco.', 'error');
+        return;
+    }
+
+    if (confirm('¿Vincular este pago con el movimiento seleccionado?')) {
+        fetch('/conciliar_manual', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                movimiento_id: movimientoId,
+                pago_id: pagoId
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                mostrarNotificacion('Pago conciliado correctamente.', 'exito');
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                mostrarNotificacion('Error: ' + (data.message || 'Error desconocido'), 'error');
+            }
+        });
+    }
+}
+
+function buscarPorCheque(movimientoId, montoMovimiento) {
+    const inputCheque = document.getElementById(`nro_cheque_${movimientoId}`);
+    const nroCheque = inputCheque.value.trim();
+
+    if (!nroCheque) {
+        mostrarNotificacion('Ingresá el número de cheque.', 'error');
+        return;
+    }
+
+    fetch('/buscar_pago_por_cheque', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({numero_cheque: nroCheque})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'ok' && data.pago_id) {
+            if (confirm(`¿Conciliar movimiento de $ ${montoMovimiento.toFixed(2)} con cheque N° ${nroCheque}?`)) {
+                fetch('/conciliar_manual', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        movimiento_id: movimientoId,
+                        pago_id: data.pago_id
+                    })
+                })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.status === 'ok') {
+                        mostrarNotificacion('Cheque conciliado correctamente.', 'exito');
+                        setTimeout(() => window.location.reload(), 1000);
+                    } else {
+                        mostrarNotificacion('Error al conciliar.', 'error');
+                    }
+                });
+            }
+        } else {
+            mostrarNotificacion('No encontré cheque N° ' + nroCheque + ' sin conciliar.', 'error');
+        }
+    });
+}
+</script>
+
+{% endif %}
+{% endblock %}

@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1 style="margin-bottom: 1.5rem;">Panel de Control de Tesorería</h1>
+
+<!-- 1. FILA SUPERIOR: 3 TARJETAS DE MÉTRICAS DINÁMICAS -->
+<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-bottom: 1.5rem;">
+    <!-- TARJETA 1 -->
+    <div class="card" style="padding: 1.5rem;">
+        <h3 style="color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; margin-bottom: 0.5rem;">FACTURAS PENDIENTES</h3>
+        <div style="display: flex; align-items: baseline; gap: 8px;">
+            <span id="card_cant_hoy" style="font-size: 2.2rem; font-weight: bold; color: var(--neon-cyan);">{{ cant_pendientes_hoy }}</span>
+            <span style="color: white; font-size: 0.85rem;">para el <span class="txt_fecha_sel">{{ fecha_hoy }}</span></span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 6px;">
+            Total pendientes acumuladas: <strong>{{ cant_pendientes_total }}</strong>
+        </p>
+    </div>
+
+    <!-- TARJETA 2 -->
+    <div class="card" style="padding: 1.5rem;">
+        <h3 style="color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; margin-bottom: 0.5rem;">MONTO A PAGAR</h3>
+        <div id="card_monto_hoy" style="font-size: 2.2rem; font-weight: bold; color: #28a745;">
+            $ {{ "%.2f"|format(monto_hoy) }}
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 6px;">
+            Compromisos para el <span class="txt_fecha_sel">{{ fecha_hoy }}</span>
+        </p>
+    </div>
+
+    <!-- TARJETA 3 -->
+    <div class="card" style="padding: 1.5rem;">
+        <h3 style="color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; margin-bottom: 0.5rem;">PRÓXIMOS VENCIMIENTOS (7 DÍAS)</h3>
+        <div style="display: flex; align-items: baseline; gap: 8px;">
+            <span id="card_vencen_pronto" style="font-size: 2.2rem; font-weight: bold; color: #ffc107;">{{ cant_vencen_pronto }}</span>
+            <span id="card_monto_vencen_pronto" style="color: var(--text-muted); font-size: 0.85rem;">($ {{ "%.2f"|format(monto_vencen_pronto) }})</span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 6px;">
+            Facturas que vencen a partir del <span class="txt_fecha_sel">{{ fecha_hoy }}</span>
+        </p>
+    </div>
+</div>
+
+<!-- 2. FILA INFERIOR: CALENDARIO Y RECORDATORIOS
+     - grid-template-columns: 1fr 1fr → Dos columnas del mismo tamaño (1fr cada una). Cambia a "1fr 2fr" para que recordatorios sea el doble de ancho
+     - gap: 1.5rem → Espacio entre las dos tarjetas (aumenta para más separación)
+     MODIFICA ESTOS VALORES PARA CAMBIAR EL ANCHO DEL CALENDARIO Y RECORDATORIOS -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+    <!-- MINI CALENDARIO = Calendario interactivo con días con pagos programados
+         - padding: 1.5rem → Espacio interno de la tarjeta
+         - En línea 56: grid-template-columns: repeat(7, 1fr) → Grilla de 7 columnas (lunes-domingo)
+         - En línea 60: gap: 4px → Espacio entre los días del calendario (aumenta para más separación)
+         - En línea 56: font-size: 0.8rem → Tamaño del texto de días de la semana (aumenta para letra más grande)
+         - En línea 96: padding: 8px 0 → Espacio dentro de cada día (aumenta para celdas más grandes)
+         - En línea 96: font-size: 0.85rem → Tamaño de los números del calendario
+         MODIFICA ESTOS VALORES PARA CAMBIAR EL TAMAÑO DEL CALENDARIO -->
+    <div class="card" style="padding: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 id="titulo_mes" style="color: var(--neon-cyan); margin: 0; font-size: 0.95rem; text-transform: uppercase; font-weight: bold;"></h3>
+            <div style="display: flex; gap: 4px;">
+                <button type="button" onclick="cambiarMes(-1)" class="btn-neon" style="padding: 2px 8px; font-size: 0.8rem;">◄</button>
+                <button type="button" onclick="cambiarMes(1)" class="btn-neon" style="padding: 2px 8px; font-size: 0.8rem;">►</button>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-weight: bold; color: white; font-size: 0.8rem; margin-bottom: 8px;">
+            <div>Dom</div><div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div>
+        </div>
+
+        <div id="grid_dias" style="display: grid; grid-template-columns: repeat(4, 5fr); gap: 4px; text-align: center;"></div>
+
+        <p style="color: var(--text-muted); font-size: 0.75rem; margin-top: 10px; margin-bottom: 0; display: flex; align-items: center; gap: 6px;">
+            <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #ffc107;"></span>
+            Día con pagos programados
+        </p>
+    </div>
+
+    <!-- PANEL DE RECORDATORIOS = Tarjeta para agregar y ver recordatorios, tareas y avisos
+         - padding: 1.5rem → Espacio interno de la tarjeta
+         - display: flex; flex-direction: column → Disposición vertical de elementos
+         - En línea 73: padding: 8px 12px → Espacio dentro del input de texto (aumenta para input más grande)
+         - En línea 85: max-height: 320px → Altura máxima antes de scrollbar (aumenta para ver más recordatorios sin scroll)
+         - En línea 85: overflow-y: auto → Scroll vertical cuando hay muchos recordatorios
+         - En línea 73: font-size: 0.85rem → Tamaño del texto en el input
+         MODIFICA ESTOS VALORES PARA CAMBIAR EL TAMAÑO DEL PANEL DE RECORDATORIOS -->
+    <div class="card" style="padding: 1.5rem; display: flex; flex-direction: column;">
+        <h3 style="margin-bottom: 1rem; font-size: 0.9rem; font-weight: bold;">📌 RECORDATORIOS (<span class="txt_fecha_sel">{{ fecha_hoy }}</span>)</h3>
+
+        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <input type="text" id="input_nota" placeholder="Agregar tarea, reunión o aviso..." style="flex-grow: 1; padding: 8px 12px; background: #0b132b; color: white; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.85rem;">
+            <button type="button" onclick="agregarRecordatorio()" class="btn-neon" style="padding: 8px 16px; white-space: nowrap;">+ Agregar</button>
+        </div>
+
+        <select id="select_recurrencia" style="width: 100%; padding: 7px; margin-bottom: 1rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white; font-size: 0.8rem;">
+            <option value="unica" selected>Repetición: Única vez</option>
+            <option value="semanal">Repetición: Semanal</option>
+            <option value="quincenal">Repetición: Quincenal (cada 15 días)</option>
+            <option value="mensual">Repetición: Mensual</option>
+            <option value="quincenal_laborable">Repetición: Quincenal Laborable (días 1 y 15, ajustado a día hábil)</option>
+        </select>
+
+        <ul id="lista_recordatorios" style="list-style: none; padding: 0; margin: 0; max-height: 320px; overflow-y: auto; flex-grow: 1;"></ul>
+    </div>
+</div>
+
+<style>
+.dia-cal {
+    position: relative;
+    padding: 8px 0;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.03);
+    color: white;
+    font-size: 0.85rem;
+    cursor: pointer;
+    border: 1px solid transparent;
+}
+.dia-cal:hover {
+    border-color: var(--neon-cyan);
+}
+.dia-cal.hoy {
+    border-color: var(--neon-cyan);
+}
+.dia-cal.seleccionado {
+    background: var(--neon-cyan);
+    color: black;
+    font-weight: bold;
+}
+.punto-pago {
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #ffc107;
+}
+.dia-cal.seleccionado .punto-pago {
+    background: #7a5b00;
+}
+</style>
+
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

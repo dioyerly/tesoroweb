@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plataforma de Tesorería Inteligente</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+</head>
+<body>
+
+    <!-- BARRA DE NAVEGACIÓN ÚNICA -->
+    <nav class="navbar">
+        <div class="brand">⚡ Tesorería Multi-Empresa</div>
+        {% if current_user.is_authenticated %}
+        <div style="display: flex; gap: 8px; align-items: center;">
+            {% if current_user.rol == 'SuperAdmin' %}
+                <a href="/admin" class="btn-neon" style="background: #ffc107; color: black;">👑 Panel Propietario</a>
+            {% else %}
+                <a href="/" class="btn-neon">Panel Principal</a>
+                <a href="/cargar_factura" class="btn-neon">Cargar Factura</a>
+                <a href="/pagos" class="btn-neon">Gestión de Pagos</a>
+                <a href="/conciliacion" class="btn-neon">Conciliación</a>
+                <a href="/configuracion" class="btn-neon">Configuración</a>
+            {% endif %}
+            <a href="/logout" class="btn-neon" style="background: #dc3545; color: white; margin-left: 10px;">🚪 Salir ({{ current_user.nombre.split()[0] }})</a>
+        </div>
+        {% endif %}
+    </nav>
+
+    <!-- CONTENIDO DINÁMICO -->
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div style="margin-bottom: 1.5rem;">
+              {% for category, message in messages %}
+                <div class="aviso-flash aviso-{{ category }}">
+                  {{ message }}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </div>
+
+        <style>
+        .aviso-flash {
+            padding: 10px 14px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+        .aviso-success {
+            background: rgba(40, 167, 69, 0.15);
+            color: #28a745;
+            border: 1px solid #28a745;
+        }
+        .aviso-danger {
+            background: rgba(220, 53, 69, 0.15);
+            color: #dc3545;
+            border: 1px solid #dc3545;
+        }
+        .aviso-info, .aviso-message {
+            background: rgba(0, 180, 216, 0.15);
+            color: var(--neon-cyan);
+            border: 1px solid var(--neon-cyan);
+        }
+    </style>
+    
+</body>
+</html>

@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+    <h1>Consola de Pagos Programados</h1>
+    <div style="display: flex; gap: 10px;">
+        <button type="button" onclick="descargarExcelFiltrado(false)" class="btn-neon" style="background: #28a745; color: white;">📥 Descargar Pendientes (Excel)</button>
+        <button type="button" onclick="descargarExcelFiltrado(true)" class="btn-neon" style="background: #17a2b8; color: white;">📥 Descargar Todo (Excel)</button>
+    </div>
+</div>
+
+<!-- BARRA DE FILTROS -->
+<div class="card" style="margin-bottom: 1.5rem; padding: 1rem;">
+    <form method="GET" action="/pagos" id="form_filtros" style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+        <div>
+            <label style="color: var(--text-muted); font-size: 0.8rem;">Sociedad:</label>
+            <select name="sociedad_id" id="filtro_sociedad" style="padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+                <option value="">Todas</option>
+                {% for s in sociedades %}
+                    <option value="{{ s.id }}" {% if sociedad_id_selected == s.id|string %}selected{% endif %}>{{ s.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label style="color: var(--text-muted); font-size: 0.8rem;">Forma de Pago:</label>
+            <select name="forma_pago" id="filtro_forma_pago" style="padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+                <option value="">Todas</option>
+                <option value="Transferencia" {% if forma_pago_selected == 'Transferencia' %}selected{% endif %}>Transferencia</option>
+                <option value="Cheques" {% if forma_pago_selected == 'Cheques' or forma_pago_selected == 'Cheques / eCheqs' %}selected{% endif %}>Cheques / eCheqs</option>
+                <option value="Haberes" {% if forma_pago_selected == 'Haberes' %}selected{% endif %}>Haberes</option>
+                <option value="Servicios" {% if forma_pago_selected == 'Servicios' or forma_pago_selected == 'Servicios / Pagos Directos' %}selected{% endif %}>Servicios / Pagos Directos</option>
+            </select>
+        </div>
+        <div>
+            <label style="color: var(--text-muted); font-size: 0.8rem;">Fecha Pago:</label>
+            <input type="date" name="fecha_pago" id="filtro_fecha" value="{{ fecha_pago_selected or '' }}" style="padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+        </div>
+        <button type="submit" class="btn-neon" style="margin-top: 15px; padding: 6px 15px;">Filtrar</button>
+        <a href="/pagos" style="margin-top: 15px; color: var(--text-muted); text-decoration: none; font-size: 0.85rem;">Limpiar Filtros</a>
+    </form>
+</div>
+
+<!-- TABLA CON COLUMNA DE FORMA DE PAGO Y DESCARGA FILTRADA EN EXCEL -->
+<!-- BOTÓN ACCIÓN MASIVA -->
+<div style="margin-bottom: 1rem; display: flex; gap: 10px;">
+    <button type="button" onclick="marcarSeleccionadosComoPagados()" class="btn-neon" style="background: #00b4d8; color: black;">✔ Marcar Seleccionados como PAGADOS</button>
+    <button type="button" onclick="eliminarSeleccionados()" class="btn-neon" style="background: #dc3545; color: white;">🗑️ Eliminar Seleccionados</button>
+</div>
+
+<!-- TABLA PRINCIPAL DE PAGOS -->
+<div class="card" style="overflow-x: visible; margin-left: -2rem; margin-right: -2rem; padding-left: 2rem; padding-right: 2rem; width: calc(100% + 4rem);">
+    <table style="width: 100%; border-collapse: collapse; text-align: left;">
+        <thead>
+            <tr style="border-bottom: 1px solid var(--border-color); color: var(--neon-cyan);">
+                <th style="padding: 8px 6px; white-space: nowrap;"><input type="checkbox" id="check_all" onclick="toggleCheckboxes(this)"></th>
+                <th style="padding: 8px 6px; white-space: nowrap;">Proveedor / Servicio</th>
+                <th style="padding: 8px 6px; font-size: 0.8rem; color: var(--text-muted); white-space: nowrap;">Sociedad</th>
+                <th style="padding: 8px 6px; white-space: nowrap;">Descripción</th>
+                <th style="padding: 8px 6px; white-space: nowrap;">Comprobante</th>
+                <th style="padding: 8px 6px; white-space: nowrap;">OC/OP</th>
+                <th style="padding: 8px 6px; white-space: nowrap;">Monto Total</th>
+                <th style="padding: 8px 6px; white-space: nowrap;">Fecha Prog.</th>
+                <th style="padding: 8px 6px; white-space: nowrap;">Estado</th>
+                <th style="padding: 8px 6px; text-align: center; white-space: nowrap;">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in pagos %}
+            <tr class="fila-pago {% if p.estado == 'pagado' %}fila-pagada{% endif %}">
+                <td style="padding: 8px 6px; white-space: nowrap;">
+                    {% if p.estado != 'pagado' %}
+                        <input type="checkbox" class="check_pago" value="{{ p.id }}">
+                    {% endif %}
+                </td>
+                <td style="padding: 8px 6px;">
+                    <div style="font-weight: bold; color: white; margin-bottom: 3px; font-size: 0.9rem;">{{ p.proveedor_nombre }}</div>
+                    {% if p.proveedor_id and p.tipo_gasto == 'proveedor' %}
+                        <div style="font-size: 0.6rem; color: var(--text-muted);">
+                            <span id="cbu_display_{{ p.id }}" style="display: inline;">
+                                <span style="color: #888;">CBU/Alias:</span>
+                                <span style="color: #aaa;">{{ p.cbu_alias or "(vacío)" }}</span>
+                                <a href="/editar_pago/{{ p.id }}" style="background: none; border: none; color: var(--neon-cyan); cursor: pointer; font-size: 0.6rem; padding: 0 2px; text-decoration: underline; margin-left: 4px;">✎</a>
+                            </span>
+                            <div id="cbu_edit_{{ p.id }}" style="display: none; margin-top: 3px;">
+                                <input type="text" id="cbu_input_{{ p.id }}" value="{{ p.cbu_alias or "" }}" placeholder="CBU o alias" style="width: 100%; padding: 3px; font-size: 0.6rem; border-radius: 3px; border: 1px solid var(--neon-cyan); background: var(--bg-principal); color: white;">
+                                <div style="margin-top: 3px; display: flex; gap: 2px;">
+                                    <button type="button" class="btn-guardar-cbu" data-pago-id="{{ p.id }}" data-proveedor-id="{{ p.proveedor_id }}" style="background: #28a745; color: white; border: none; padding: 2px 5px; font-size: 0.6rem; border-radius: 3px; cursor: pointer;">✓</button>
+                                    <button type="button" class="btn-cancelar-cbu" data-pago-id="{{ p.id }}" style="background: #dc3545; color: white; border: none; padding: 2px 5px; font-size: 0.6rem; border-radius: 3px; cursor: pointer;">✕</button>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                </td>
+                <td style="padding: 8px 6px; color: var(--text-muted); font-size: 0.7rem; white-space: nowrap;">{{ p.sociedad_nombre }}</td>
+                <td style="padding: 8px 6px; color: var(--text-muted); font-size: 0.8rem;">{{ p.descripcion or '-' }}</td>
+                <td style="padding: 8px 6px; white-space: nowrap; font-size: 0.8rem;">{{ p.nro_factura }}</td>
+                <td style="padding: 8px 6px; white-space: nowrap; font-size: 0.8rem;">{{ p.nro_oc_op }}</td>
+                <td style="padding: 8px 6px; font-weight: bold; color: #28a745; white-space: nowrap; font-size: 0.8rem;">$ {{ "%.2f"|format(p.monto) }}</td>
+
+                <td style="padding: 8px 6px; white-space: nowrap;">
+                    <form action="/actualizar_fecha_pago" method="POST" id="form_fecha_{{ p.id }}" style="display: inline;">
+                        <input type="hidden" name="pago_id" value="{{ p.id }}">
+                        <input type="date" name="nueva_fecha" value="{{ p.fecha_pago_programada }}" style="padding: 3px; font-size: 0.8rem; border-radius: 3px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+                    </form>
+                </td>
+
+                <td style="padding: 8px 6px; white-space: nowrap;">
+                    {% if p.estado == 'pagado' %}
+                        <span style="background: rgba(40, 167, 69, 0.2); color: #28a745; border: 1px solid #28a745; padding: 3px 6px; border-radius: 3px; font-size: 0.7rem; font-weight: bold;">PAGADO</span>
+                    {% else %}
+                        <span style="background: rgba(255, 193, 7, 0.2); color: #ffc107; border: 1px solid #ffc107; padding: 3px 6px; border-radius: 3px; font-size: 0.7rem; font-weight: bold;">PENDIENTE</span>
+                    {% endif %}
+                </td>
+
+                <td style="padding: 8px 6px; text-align: center;">
+                    <div style="display: flex; gap: 4px; justify-content: center;">
+                        <button type="submit" form="form_fecha_{{ p.id }}" class="btn-neon" style="padding: 5px 7px; font-size: 0.75rem; white-space: nowrap;" title="Guardar Fecha">Guardar</button>
+
+                        {% if p.estado == 'pagado' %}
+                        <button type="button" data-id="{{ p.id }}" onclick="marcarComoPendiente(this.getAttribute('data-id'))" class="btn-neon" style="background: #ffc107; color: black; padding: 3px 5px; font-size: 0.7rem;" title="Volver a Pendiente">↩</button>
+                        {% else %}
+                        <button type="button" data-id="{{ p.id }}" onclick="marcarIndividualPagado(this.getAttribute('data-id'))" class="btn-neon" style="background: #28a745; color: white; padding: 5px 7px; font-size: 0.75rem;" title="Marcar como Pagado">✔</button>
+                        {% endif %}
+
+                        <form action="/eliminar_pago/{{ p.id }}" method="POST" onsubmit="return confirm('¿Confirma eliminar este pago?');" style="display: inline;">
+                            <button type="submit" class="btn-neon" style="background: #dc3545; color: white; padding: 5px 7px; font-size: 0.75rem;" title="Eliminar Pago">🗑️</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="10" style="padding: 15px; text-align: center; color: var(--text-muted);">No hay pagos registrados.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<style>
+.fila-pago {
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.fila-pagada {
+    opacity: 0.45;
+    background: rgba(0,0,0,0.2);
+}
+</style>
+
+<script src="{{ url_for('static', filename='js/pagos.js') }}"></script>
+{% endblock %}

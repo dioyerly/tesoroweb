@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python seed_demo.py)",
+      "Bash(timeout 5 python -c \"from app import app; print\\('OK'\\)\")"
+    ]
+  }
+}

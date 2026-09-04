@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1 style="margin-bottom: 1.5rem;">👑 Consola del Propietario (SuperAdmin)</h1>
+
+<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1.5rem;">
+    <div class="card" style="padding: 1.5rem;">
+        <h3>Dar de Alta Nuevo Cliente</h3>
+        <form action="/admin/crear_cliente" method="POST">
+            <label style="color: var(--neon-cyan); font-size: 0.85rem; display: block; margin-top: 10px;">Empresa:</label>
+            <input type="text" name="nombre_empresa" placeholder="Razón Social" required style="width: 100%; padding: 8px; margin-bottom: 8px; background: #0b132b; color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+            <input type="text" name="cuit_empresa" placeholder="CUIT Empresa" required style="width: 100%; padding: 8px; margin-bottom: 15px; background: #0b132b; color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+
+            <label style="color: var(--neon-cyan); font-size: 0.85rem; display: block;">Administrador Inicial:</label>
+            <input type="text" name="nombre_admin" placeholder="Nombre completo" required style="width: 100%; padding: 8px; margin-bottom: 8px; background: #0b132b; color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+            <input type="email" name="email_admin" placeholder="Email de acceso" required style="width: 100%; padding: 8px; margin-bottom: 8px; background: #0b132b; color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+            <input type="password" name="password_admin" placeholder="Contraseña provisoria" required style="width: 100%; padding: 8px; margin-bottom: 15px; background: #0b132b; color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+
+            <button type="submit" class="btn-neon" style="width: 100%;">+ Activar Cliente</button>
+        </form>
+    </div>
+
+    <div class="card" style="padding: 1.5rem;">
+        <h3>Empresas Clientes Activas</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border-color); color: var(--neon-cyan); text-align: left;">
+                    <th style="padding: 8px;">Empresa</th>
+                    <th style="padding: 8px;">CUIT</th>
+                    <th style="padding: 8px;">Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in empresas %}
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <td style="padding: 8px; color: white; font-weight: bold;">{{ e.nombre }}</td>
+                    <td style="padding: 8px;">{{ e.cuit }}</td>
+                    <td style="padding: 8px;"><span style="color: #28a745;">{{ e.estado_suscripcion.upper() }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<table style="width: 100%; border-collapse: collapse;">
+    <thead>
+        <tr style="border-bottom: 1px solid var(--border-color); color: var(--neon-cyan); text-align: left;">
+            <th style="padding: 8px;">Empresa</th>
+            <th style="padding: 8px;">CUIT</th>
+            <th style="padding: 8px;">Estado</th>
+            <th style="padding: 8px; text-align: center;">Acción</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for e in empresas %}
+        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <td style="padding: 8px; color: white; font-weight: bold;">{{ e.nombre }}</td>
+            <td style="padding: 8px;">{{ e.cuit }}</td>
+            <td style="padding: 8px;"><span style="color: #28a745;">{{ e.estado_suscripcion.upper() }}</span></td>
+            <td style="padding: 8px; text-align: center;">
+                <a href="/admin/simular_empresa/{{ e.id }}" class="btn-neon" style="padding: 4px 10px; font-size: 0.75rem; text-decoration: none;">👁️ Entrar como Cliente</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
