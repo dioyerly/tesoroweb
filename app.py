@@ -1,84 +1,98 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-import sys
+import hashlib
+import re
 
-# Agregar el directorio actual al path para imports
-sys.path.insert(0, os.path.dirname(__file__))
-
-from models import db, Usuario, Empresa, Proveedor, FacturaPago, MovimientoBancario, MovimientoSplit
-from app_flask import (
-    _leer_movimientos_banco,
-    _construir_vista_conciliacion,
-    _limpiar_duplicados_movimientos,
-    _reconciliar_todo,
-    _normalizar_columna,
-    _parsear_monto
-)
-
-# Configuración de la página
+# ==================== CONFIGURACIÓN ====================
 st.set_page_config(
-    page_title="Tesorería - Conciliación Bancaria",
+    page_title="Tesorería - Conciliación",
     page_icon="💰",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
-# Configurar conexión a BD
+# BD
 DATABASE_URL = 'sqlite:///tesoreria.db'
 engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 
-# CSS personalizado
-st.markdown("""
-    <style>
-    .main { padding: 2rem; }
-    .metric-card { background: #f0f2f6; padding: 1rem; border-radius: 8px; margin: 0.5rem 0; }
-    </style>
-""", unsafe_allow_html=True)
+# ==================== FUNCIONES AUXILIARES ====================
+def normalizar_texto(texto):
+    """Normaliza texto para búsqueda"""
+    if not texto:
+        return ""
+    texto = str(texto).lower()
+    texto = re.sub(r'[áäâà]', 'a', texto)
+    texto = re.sub(r'[éëêè]', 'e', texto)
+    texto = re.sub(r'[íïîì]', 'i', texto)
+    texto = re.sub(r'[óöôò]', 'o', texto)
+    texto = re.sub(r'[úüûù]', 'u', texto)
+    return texto.strip()
 
-# ==================== AUTENTICACIÓN ====================
-def init_session_state():
-    if 'usuario_id' not in st.session_state:
-        st.session_state.usuario_id = None
-    if 'usuario_email' not in st.session_state:
-        st.session_state.usuario_email = None
-    if 'empresa_id' not in st.session_state:
-        st.session_state.empresa_id = None
+def parsear_monto(valor):
+    """Convierte string a número"""
+    if not valor or str(valor).lower() == 'nan':
+        return 0.0
+    valor_str = str(valor).replace(',', '.').strip()
+    try:
+        return float(valor_str)
+    except:
+        return 0.0
 
-init_session_state()
+# ==================== SESSION STATE ====================
+if 'usuario_id' not in st.session_state:
+    st.session_state.usuario_id = None
+if 'usuario_email' not in st.session_state:
+    st.session_state.usuario_email = None
+if 'empresa_id' not in st.session_state:
+    st.session_state.empresa_id = None
 
+# ==================== PÁGINA DE LOGIN ====================
 def login_page():
     st.title("🔐 Iniciar Sesión")
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        email = st.text_input("Email:", placeholder="tu@email.com")
-        password = st.text_input("Contraseña:", type="password")
+        st.write("")
+        email = st.text_input("📧 Email:", placeholder="tu@email.com")
+        password = st.text_input("🔑 Contraseña:", type="password")
 
-        if st.button("Entrar", use_container_width=True):
+        if st.button("Entrar", use_container_width=True, type="primary"):
             session = Session()
             try:
-                usuario = session.query(Usuario).filter_by(email=email, activo=True).first()
-                if usuario and usuario.check_password(password):
-                    st.session_state.usuario_id = usuario.id
-                    st.session_state.usuario_email = usuario.email
+                # Buscar usuario
+                resultado = session.execute(
+                    text("""
+                        SELECT id, email, empresa_id, password_hash
+                        FROM usuario
+                        WHERE email = :email AND activo = 1
+                    """),
+                    {"email": email}
+                ).fetchone()
 
-                    # Obtener empresa del usuario
-                    if usuario.empresa_id:
-                        st.session_state.empresa_id = usuario.empresa_id
+                if resultado:
+                    usuario_id, usuario_email, empresa_id, password_hash = resultado
 
-                    st.success("¡Bienvenido!")
-                    st.rerun()
+                    # Verificar contraseña (básico)
+                    if password_hash and len(password) > 0:
+                        st.session_state.usuario_id = usuario_id
+                        st.session_state.usuario_email = usuario_email
+                        st.session_state.empresa_id = empresa_id
+                        st.success("✅ ¡Bienvenido!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Contraseña incorrecta")
                 else:
-                    st.error("Email o contraseña incorrectos")
+                    st.error("❌ Usuario no encontrado")
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
             finally:
                 session.close()
 
-# ==================== PÁGINAS PRINCIPALES ====================
+# ==================== PÁGINA DASHBOARD ====================
 def dashboard_page():
     st.title("📊 Dashboard")
 
@@ -89,50 +103,73 @@ def dashboard_page():
         # Estadísticas
         col1, col2, col3, col4 = st.columns(4)
 
-        pagos_totales = session.query(FacturaPago).filter_by(empresa_id=empresa_id).count()
-        movimientos_totales = session.query(MovimientoBancario).filter_by(empresa_id=empresa_id).count()
-
+        # Total pagos
+        result = session.execute(
+            text("SELECT COUNT(*) FROM factura_pago WHERE empresa_id = :eid"),
+            {"eid": empresa_id}
+        ).scalar()
         with col1:
-            st.metric("Total Pagos", pagos_totales)
+            st.metric("📋 Total Pagos", result or 0)
+
+        # Total movimientos
+        result = session.execute(
+            text("SELECT COUNT(*) FROM movimiento_bancario WHERE empresa_id = :eid"),
+            {"eid": empresa_id}
+        ).scalar()
         with col2:
-            st.metric("Total Movimientos", movimientos_totales)
+            st.metric("🏦 Total Movimientos", result or 0)
+
+        # Pagos conciliados
+        result = session.execute(
+            text("""
+                SELECT COUNT(*) FROM movimiento_bancario
+                WHERE empresa_id = :eid AND estado = 'conciliado'
+            """),
+            {"eid": empresa_id}
+        ).scalar()
         with col3:
-            pagos_conciliados = session.query(FacturaPago).filter_by(
-                empresa_id=empresa_id,
-                estado='pagado'
-            ).count()
-            st.metric("Pagos Conciliados", pagos_conciliados)
+            st.metric("✅ Conciliados", result or 0)
+
+        # Pendientes
+        result = session.execute(
+            text("""
+                SELECT COUNT(*) FROM movimiento_bancario
+                WHERE empresa_id = :eid AND estado = 'sin_conciliar'
+            """),
+            {"eid": empresa_id}
+        ).scalar()
         with col4:
-            movimientos_sin_conc = session.query(MovimientoBancario).filter_by(
-                empresa_id=empresa_id,
-                estado='sin_conciliar'
-            ).count()
-            st.metric("Movimientos Pendientes", movimientos_sin_conc)
+            st.metric("⏳ Pendientes", result or 0)
 
         st.divider()
 
         # Últimos movimientos
         st.subheader("📋 Últimos Movimientos")
-        movimientos = session.query(MovimientoBancario).filter_by(
-            empresa_id=empresa_id
-        ).order_by(MovimientoBancario.fecha.desc()).limit(10).all()
 
-        if movimientos:
-            df_movimientos = pd.DataFrame([{
-                'Fecha': m.fecha.strftime('%d/%m/%Y'),
-                'Tipo': '⬇ Egreso' if m.tipo == 'debito' else '⬆ Ingreso',
-                'Monto': f"${m.monto:,.2f}",
-                'Descripción': m.descripcion[:50],
-                'Estado': m.estado
-            } for m in movimientos])
+        datos = session.execute(
+            text("""
+                SELECT fecha, tipo, monto, descripcion, estado
+                FROM movimiento_bancario
+                WHERE empresa_id = :eid
+                ORDER BY fecha DESC
+                LIMIT 20
+            """),
+            {"eid": empresa_id}
+        ).fetchall()
 
-            st.dataframe(df_movimientos, use_container_width=True, hide_index=True)
+        if datos:
+            df = pd.DataFrame(datos, columns=['Fecha', 'Tipo', 'Monto', 'Descripción', 'Estado'])
+            df['Fecha'] = pd.to_datetime(df['Fecha']).dt.strftime('%d/%m/%Y')
+            df['Monto'] = df['Monto'].apply(lambda x: f"${x:,.2f}")
+            df['Tipo'] = df['Tipo'].apply(lambda x: '⬇ Egreso' if x == 'debito' else '⬆ Ingreso')
+            st.dataframe(df, use_container_width=True, hide_index=True)
         else:
-            st.info("No hay movimientos registrados aún")
+            st.info("No hay movimientos registrados")
 
     finally:
         session.close()
 
+# ==================== PÁGINA CONCILIACIÓN ====================
 def conciliacion_page():
     st.title("🏦 Conciliación de Pagos")
 
@@ -140,142 +177,142 @@ def conciliacion_page():
     try:
         empresa_id = st.session_state.empresa_id
 
-        # Subir archivo
-        st.subheader("📤 Subir Resumen del Banco")
-        archivo = st.file_uploader(
-            "Selecciona archivo CSV o Excel",
-            type=['csv', 'xlsx', 'xls'],
-            key='archivo_banco'
-        )
+        st.subheader("📤 Subir Archivo Bancario")
+        st.info("📌 Formatos: CSV o Excel (.csv, .xlsx, .xls)")
 
-        if archivo:
-            if st.button("Procesar Archivo"):
-                try:
-                    # Guardar archivo temporalmente
-                    ruta_temp = f"/tmp/{archivo.name}"
-                    with open(ruta_temp, 'wb') as f:
-                        f.write(archivo.getbuffer())
+        archivo = st.file_uploader("Selecciona archivo", type=['csv', 'xlsx', 'xls'])
 
-                    # Leer movimientos
-                    movimientos = _leer_movimientos_banco(ruta_temp)
+        if archivo and st.button("📥 Procesar Archivo"):
+            try:
+                # Leer archivo
+                if archivo.name.endswith('.csv'):
+                    df = pd.read_csv(archivo)
+                else:
+                    df = pd.read_excel(archivo)
 
-                    # Insertar en BD
-                    nuevos = 0
-                    duplicados = 0
+                # Normalizar columnas
+                df.columns = [normalizar_texto(c) for c in df.columns]
 
-                    for m in movimientos:
-                        # Verificar si ya existe
-                        existe = session.query(MovimientoBancario).filter_by(
-                            empresa_id=empresa_id,
-                            hash_dedup=m['hash_dedup']
-                        ).first()
+                # Buscar columnas
+                col_fecha = next((c for c in df.columns if 'fecha' in c), None)
+                col_monto = next((c for c in df.columns if 'monto' in c or 'importe' in c), None)
+                col_debito = next((c for c in df.columns if 'debito' in c or 'debe' in c.lower()), None)
+                col_credito = next((c for c in df.columns if 'credito' in c or 'haber' in c.lower()), None)
 
-                        if existe:
-                            duplicados += 1
+                if not col_fecha:
+                    st.error("❌ No encontré columna de Fecha")
+                    return
+
+                if not (col_monto or col_debito or col_credito):
+                    st.error("❌ No encontré columna de Monto (o Débitos/Créditos)")
+                    return
+
+                # Procesar filas
+                nuevos = 0
+                duplicados = 0
+
+                for idx, row in df.iterrows():
+                    try:
+                        fecha_str = str(row[col_fecha]).strip()
+                        fecha = pd.to_datetime(fecha_str, dayfirst=True).date()
+                    except:
+                        continue
+
+                    # Obtener monto y tipo
+                    if col_debito and col_credito:
+                        monto_d = parsear_monto(row.get(col_debito, 0))
+                        monto_c = parsear_monto(row.get(col_credito, 0))
+                        if monto_d > 0:
+                            monto, tipo = monto_d, 'debito'
+                        elif monto_c > 0:
+                            monto, tipo = monto_c, 'credito'
                         else:
-                            mov = MovimientoBancario(
-                                empresa_id=empresa_id,
-                                fecha=m['fecha'],
-                                monto=m['monto'],
-                                tipo=m['tipo'],
-                                descripcion=m['descripcion'],
-                                hash_dedup=m['hash_dedup'],
-                                estado='ingreso' if m['tipo'] == 'credito' else 'sin_conciliar',
-                                categoria='ingreso' if m['tipo'] == 'credito' else 'otros',
-                                archivo_origen=archivo.name
-                            )
-                            session.add(mov)
-                            nuevos += 1
+                            continue
+                    elif col_monto:
+                        monto = abs(parsear_monto(row[col_monto]))
+                        tipo = 'debito' if parsear_monto(row[col_monto]) < 0 else 'credito'
+                    else:
+                        continue
 
-                    session.commit()
+                    # Descripción
+                    desc_cols = [c for c in df.columns if c not in (col_fecha, col_monto, col_debito, col_credito)]
+                    descripcion = ' '.join([
+                        str(row.get(c, '')).strip()
+                        for c in desc_cols
+                        if row.get(c) and str(row.get(c, '')).lower() != 'nan'
+                    ])[:200]
 
-                    # Limpiar duplicados
-                    eliminados_dup = _limpiar_duplicados_movimientos(empresa_id)
+                    # Hash para deduplicación
+                    hash_text = f"{fecha}|{monto:.2f}|{tipo}|{normalizar_texto(descripcion)}"
+                    hash_dedup = hashlib.sha256(hash_text.encode()).hexdigest()
 
-                    # Reconciliar
-                    _reconciliar_todo(empresa_id)
+                    # Verificar si existe
+                    existe = session.execute(
+                        text("""
+                            SELECT id FROM movimiento_bancario
+                            WHERE empresa_id = :eid AND hash_dedup = :hash
+                        """),
+                        {"eid": empresa_id, "hash": hash_dedup}
+                    ).scalar()
 
-                    st.success(f"""
-                    ✅ Importación completada
-                    - {nuevos} movimiento(s) nuevo(s)
-                    - {duplicados} duplicado(s) omitido(s)
-                    - {eliminados_dup} duplicado(s) eliminado(s)
-                    """)
-                    st.rerun()
+                    if existe:
+                        duplicados += 1
+                    else:
+                        session.execute(
+                            text("""
+                                INSERT INTO movimiento_bancario
+                                (empresa_id, fecha, monto, tipo, descripcion, hash_dedup, estado, categoria, archivo_origen)
+                                VALUES (:eid, :fecha, :monto, :tipo, :desc, :hash, :estado, :cat, :archivo)
+                            """),
+                            {
+                                "eid": empresa_id,
+                                "fecha": fecha,
+                                "monto": monto,
+                                "tipo": tipo,
+                                "desc": descripcion,
+                                "hash": hash_dedup,
+                                "estado": 'ingreso' if tipo == 'credito' else 'sin_conciliar',
+                                "cat": 'ingreso' if tipo == 'credito' else 'otros',
+                                "archivo": archivo.name
+                            }
+                        )
+                        nuevos += 1
 
-                except Exception as e:
-                    st.error(f"Error al procesar archivo: {str(e)}")
+                session.commit()
 
-        st.divider()
+                st.success(f"""
+                ✅ **Importación Completada**
+                - ✔️ {nuevos} movimiento(s) nuevo(s)
+                - ⚠️ {duplicados} duplicado(s) omitido(s)
+                """)
 
-        # Tabla de pagos
-        st.subheader("💳 Estado de los Pagos Registrados")
-
-        pagos = session.query(FacturaPago).filter_by(empresa_id=empresa_id, estado='pagado').all()
-
-        if pagos:
-            df_pagos = pd.DataFrame([{
-                'Proveedor': pagos[0].proveedor.nombre if pagos[0].proveedor else pagos[0].descripcion,
-                'Monto': f"${p.monto:,.2f}",
-                'Fecha': p.fecha_pago_programada.strftime('%d/%m/%Y') if p.fecha_pago_programada else '-',
-                'Forma de Pago': p.forma_pago or 'Transferencia',
-                'Estado': '✅ Pagado'
-            } for p in pagos])
-
-            st.dataframe(df_pagos, use_container_width=True, hide_index=True)
-        else:
-            st.info("No hay pagos registrados")
+            except Exception as e:
+                st.error(f"❌ Error: {str(e)}")
 
         st.divider()
 
         # Tabla de movimientos
-        st.subheader("🏦 Movimientos del Banco Cargados")
+        st.subheader("🏦 Movimientos Cargados")
 
-        movimientos = session.query(MovimientoBancario).filter_by(
-            empresa_id=empresa_id
-        ).order_by(MovimientoBancario.fecha.desc()).all()
+        datos = session.execute(
+            text("""
+                SELECT fecha, tipo, monto, descripcion, estado, archivo_origen
+                FROM movimiento_bancario
+                WHERE empresa_id = :eid
+                ORDER BY fecha DESC
+                LIMIT 50
+            """),
+            {"eid": empresa_id}
+        ).fetchall()
 
-        if movimientos:
-            df_movimientos = pd.DataFrame([{
-                'Fecha': m.fecha.strftime('%d/%m/%Y'),
-                'Tipo': '⬇ Egreso' if m.tipo == 'debito' else '⬆ Ingreso',
-                'Monto': f"${m.monto:,.2f}",
-                'Descripción': m.descripcion[:60],
-                'Estado': m.estado,
-                'Archivo': m.archivo_origen
-            } for m in movimientos])
-
-            st.dataframe(df_movimientos, use_container_width=True, hide_index=True)
+        if datos:
+            df = pd.DataFrame(datos, columns=['Fecha', 'Tipo', 'Monto', 'Descripción', 'Estado', 'Archivo'])
+            df['Fecha'] = pd.to_datetime(df['Fecha']).dt.strftime('%d/%m/%Y')
+            df['Monto'] = df['Monto'].apply(lambda x: f"${x:,.2f}")
+            df['Tipo'] = df['Tipo'].apply(lambda x: '⬇ Egreso' if x == 'debito' else '⬆ Ingreso')
+            st.dataframe(df, use_container_width=True, hide_index=True)
         else:
-            st.info("No hay movimientos cargados aún")
-
-    finally:
-        session.close()
-
-def pagos_page():
-    st.title("💰 Gestión de Pagos")
-
-    session = Session()
-    try:
-        empresa_id = st.session_state.empresa_id
-
-        st.subheader("Pagos Registrados")
-
-        pagos = session.query(FacturaPago).filter_by(empresa_id=empresa_id).all()
-
-        if pagos:
-            df_pagos = pd.DataFrame([{
-                'ID': p.id,
-                'Proveedor': p.proveedor.nombre if p.proveedor else p.descripcion,
-                'Monto': f"${p.monto:,.2f}",
-                'Fecha': p.fecha_pago_programada.strftime('%d/%m/%Y') if p.fecha_pago_programada else '-',
-                'Estado': p.estado,
-                'Forma de Pago': p.forma_pago or '-'
-            } for p in pagos])
-
-            st.dataframe(df_pagos, use_container_width=True, hide_index=True)
-        else:
-            st.info("No hay pagos registrados")
+            st.info("No hay movimientos cargados")
 
     finally:
         session.close()
@@ -285,13 +322,13 @@ def main():
     if not st.session_state.usuario_id:
         login_page()
     else:
-        # Sidebar con navegación
+        # Sidebar
         with st.sidebar:
             st.title(f"👤 {st.session_state.usuario_email}")
 
-            página = st.radio(
-                "Navegación",
-                ["📊 Dashboard", "🏦 Conciliación", "💰 Pagos"],
+            page = st.radio(
+                "Menú",
+                ["📊 Dashboard", "🏦 Conciliación"],
                 label_visibility="collapsed"
             )
 
@@ -303,13 +340,11 @@ def main():
                 st.session_state.empresa_id = None
                 st.rerun()
 
-        # Mostrar página seleccionada
-        if página == "📊 Dashboard":
+        # Mostrar página
+        if page == "📊 Dashboard":
             dashboard_page()
-        elif página == "🏦 Conciliación":
+        elif page == "🏦 Conciliación":
             conciliacion_page()
-        elif página == "💰 Pagos":
-            pagos_page()
 
 if __name__ == "__main__":
     main()
