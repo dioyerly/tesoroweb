@@ -58,11 +58,30 @@
             <td style="padding: 8px; color: white; font-weight: bold;">{{ e.nombre }}</td>
             <td style="padding: 8px;">{{ e.cuit }}</td>
             <td style="padding: 8px;"><span style="color: #28a745;">{{ e.estado_suscripcion.upper() }}</span></td>
-            <td style="padding: 8px; text-align: center;">
-                <a href="/admin/simular_empresa/{{ e.id }}" class="btn-neon" style="padding: 4px 10px; font-size: 0.75rem; text-decoration: none;">👁️ Entrar como Cliente</a>
+            <td style="padding: 8px; text-align: center; display: flex; gap: 5px; justify-content: center; flex-wrap: wrap;">
+                <a href="/admin/simular_empresa/{{ e.id }}" class="btn-neon" style="padding: 4px 10px; font-size: 0.75rem; text-decoration: none; background: #00b4d8;">👁️ Entrar</a>
+                <a href="/admin/gestionar_empresa/{{ e.id }}" class="btn-neon" style="padding: 4px 10px; font-size: 0.75rem; text-decoration: none; background: #ffc107; color: black;">✏️ Editar</a>
+                <a href="/admin/usuarios_empresa/{{ e.id }}" class="btn-neon" style="padding: 4px 10px; font-size: 0.75rem; text-decoration: none; background: #17a2b8;">👥 Usuarios</a>
+                <button onclick="confirmarEliminar({{ e.id }}, '{{ e.nombre }}')" class="btn-neon" style="padding: 4px 10px; font-size: 0.75rem; background: #dc3545; color: white; border: none; cursor: pointer;">🗑️ Eliminar</button>
             </td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+<script>
+function confirmarEliminar(empresaId, empresaNombre) {
+    if (confirm(`¿Estás seguro que quieres eliminar a ${empresaNombre}? Esta acción no se puede deshacer.`)) {
+        fetch('/admin/eliminar_empresa/' + empresaId, {method: 'POST'})
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    alert('Empresa eliminada correctamente');
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            });
+    }
+}
+</script>
 {% endblock %}

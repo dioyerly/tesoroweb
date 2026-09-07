@@ -222,6 +222,96 @@ TIPOS_SOCIETARIOS = [
     r"\bSOCIEDAD EN COMANDITA\b",
 ]
 
+# ==================== NUEVOS ENDPOINTS DE GESTIÓN ====================
+
+@app.route('/admin/gestionar_empresa/<int:empresa_id>', methods=['GET', 'POST'])
+@login_required
+def gestionar_empresa(empresa_id):
+    if current_user.rol != 'SuperAdmin':
+        return redirect(url_for('index'))
+
+    empresa = Empresa.query.get(empresa_id)
+    if not empresa:
+        flash("Empresa no encontrada", "danger")
+        return redirect(url_for('panel_superadmin'))
+
+    if request.method == 'POST':
+        empresa.nombre = request.form.get('nombre', empresa.nombre)
+        empresa.cuit = request.form.get('cuit', empresa.cuit)
+        empresa.estado_suscripcion = request.form.get('estado', empresa.estado_suscripcion)
+        db.session.commit()
+        flash("Empresa actualizada correctamente", "success")
+        return redirect(url_for('panel_superadmin'))
+
+    return render_template('admin/gestionar_empresa.html', empresa=empresa)
+
+@app.route('/admin/usuarios_empresa/<int:empresa_id>')
+@login_required
+def usuarios_empresa(empresa_id):
+    if current_user.rol != 'SuperAdmin':
+        return redirect(url_for('index'))
+
+    empresa = Empresa.query.get(empresa_id)
+    if not empresa:
+        flash("Empresa no encontrada", "danger")
+        return redirect(url_for('panel_superadmin'))
+
+    usuarios = Usuario.query.filter_by(empresa_id=empresa_id).all()
+    return render_template('admin/usuarios_empresa.html', empresa=empresa, usuarios=usuarios)
+
+@app.route('/admin/ver_contraseña/<int:usuario_id>')
+@login_required
+def ver_contraseña(usuario_id):
+    if current_user.rol != 'SuperAdmin':
+        return jsonify({'status': 'error', 'message': 'No tienes permisos'})
+
+    usuario = Usuario.query.get(usuario_id)
+    if not usuario or usuario.empresa_id not in [e.id for e in current_user.empresa.all()] if hasattr(current_user, 'empresa') else True:
+        return jsonify({'status': 'error', 'message': 'Usuario no encontrado'})
+
+    return jsonify({'status': 'ok', 'usuario': usuario.email, 'nota': 'Las contraseñas no se pueden ver por seguridad. Usa "Resetear Contraseña" para establecer una nueva.'})
+
+@app.route('/admin/resetear_contraseña/<int:usuario_id>', methods=['POST'])
+@login_required
+def resetear_contraseña(usuario_id):
+    if current_user.rol != 'SuperAdmin':
+        return jsonify({'status': 'error', 'message': 'No tienes permisos'})
+
+    usuario = Usuario.query.get(usuario_id)
+    if not usuario:
+        return jsonify({'status': 'error', 'message': 'Usuario no encontrado'})
+
+    nueva_contraseña = request.json.get('nueva_contraseña')
+    if not nueva_contraseña or len(nueva_contraseña) < 6:
+        return jsonify({'status': 'error', 'message': 'Contraseña debe tener al menos 6 caracteres'})
+
+    usuario.set_password(nueva_contraseña)
+    usuario.debe_cambiar_password = True
+    db.session.commit()
+
+    return jsonify({'status': 'ok', 'message': 'Contraseña reseteada. El usuario deberá cambiarla en su próximo acceso.'})
+
+@app.route('/admin/eliminar_empresa/<int:empresa_id>', methods=['POST'])
+@login_required
+def eliminar_empresa(empresa_id):
+    if current_user.rol != 'SuperAdmin':
+        return jsonify({'status': 'error', 'message': 'No tienes permisos'})
+
+    empresa = Empresa.query.get(empresa_id)
+    if not empresa:
+        return jsonify({'status': 'error', 'message': 'Empresa no encontrada'})
+
+    try:
+        # Eliminar usuarios de esta empresa
+        Usuario.query.filter_by(empresa_id=empresa_id).delete()
+        # Eliminar la empresa
+        db.session.delete(empresa)
+        db.session.commit()
+        return jsonify({'status': 'ok', 'message': 'Empresa eliminada correctamente'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)})
+
 def normalizar_cuit(cuit):
   """Deja solo los números de un CUIT, para poder compararlos sin importar guiones o espacios."""
   return re.sub(r'\D', '', cuit or '')

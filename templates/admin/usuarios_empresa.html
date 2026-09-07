@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div style="max-width: 1000px; margin: 2rem auto;">
+    <a href="{{ url_for('panel_superadmin') }}" style="color: var(--neon-cyan); text-decoration: none;">← Volver al Panel</a>
+
+    <div class="card" style="padding: 2rem; margin-top: 1rem;">
+        <h2>👥 Usuarios de {{ empresa.nombre }}</h2>
+
+        <table style="width: 100%; margin-top: 1.5rem; border-collapse: collapse;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--neon-cyan); color: var(--neon-cyan);">
+                    <th style="padding: 10px; text-align: left;">Email</th>
+                    <th style="padding: 10px; text-align: left;">Nombre</th>
+                    <th style="padding: 10px; text-align: left;">Rol</th>
+                    <th style="padding: 10px; text-align: left;">Estado</th>
+                    <th style="padding: 10px; text-align: center;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if usuarios %}
+                    {% for u in usuarios %}
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <td style="padding: 10px; color: white;">{{ u.email }}</td>
+                        <td style="padding: 10px; color: white;">{{ u.nombre }}</td>
+                        <td style="padding: 10px; color: var(--neon-cyan);">{{ u.rol }}</td>
+                        <td style="padding: 10px;">
+                            <span style="color: {% if u.activo %}#28a745{% else %}#dc3545{% endif %};">
+                                {{ 'ACTIVO' if u.activo else 'INACTIVO' }}
+                            </span>
+                        </td>
+                        <td style="padding: 10px; text-align: center;">
+                            <button onclick="resetearContraseña({{ u.id }}, '{{ u.email }}')" class="btn-neon"
+                                style="padding: 5px 10px; font-size: 0.8rem; background: #ffc107; color: black; border: none; border-radius: 4px; cursor: pointer;">
+                                🔑 Resetear Pass
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="5" style="padding: 20px; text-align: center; color: var(--text-muted);">
+                            No hay usuarios en esta empresa
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function resetearContraseña(usuarioId, email) {
+    const nueva = prompt(`Ingresa nueva contraseña para ${email}:\n(Mínimo 6 caracteres)`);
+
+    if (nueva === null) return;
+
+    if (nueva.length < 6) {
+        alert('La contraseña debe tener al menos 6 caracteres');
+        return;
+    }
+
+    fetch('/admin/resetear_contraseña/' + usuarioId, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({nueva_contraseña: nueva})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'ok') {
+            alert('✅ Contraseña reseteada correctamente.\n' + data.message);
+        } else {
+            alert('❌ Error: ' + data.message);
+        }
+    });
+}
+</script>
+{% endblock %}
