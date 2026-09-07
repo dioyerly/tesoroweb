@@ -246,6 +246,54 @@
             {% endfor %}
         </div>
     </div>
+
+    <!-- ADMINISTRACIÓN DE DATOS -->
+    <div style="margin-top: 2rem;">
+        <h2 style="color: var(--neon-cyan); margin-bottom: 1rem;">⚙️ Administración de Datos</h2>
+
+        <div class="card" style="padding: 1.5rem; border: 1px solid #dc3545;">
+            <h3 style="margin-top: 0; color: #dc3545; font-size: 0.9rem;">🗑️ Limpiar Movimientos Bancarios</h3>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
+                Borra TODOS los movimientos bancarios subidos. Usa esto si necesitas resubir un resumen limpio desde el inicio.
+                <strong>⚠️ Esta acción es irreversible.</strong>
+            </p>
+
+            <button type="button" onclick="abrirModalBorrarMovimientos()" class="btn-neon" style="background: #dc3545; color: white; padding: 10px 16px;">
+                🗑️ Borrar Todos los Movimientos
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL DE CONFIRMACIÓN -->
+    <div id="modalBorrar" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+        <div class="card" style="width: 90%; max-width: 500px; padding: 2rem;">
+            <h2 style="color: #dc3545; margin-top: 0;">⚠️ Confirmación Requerida</h2>
+            <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+                Estás a punto de <strong>borrar TODOS los movimientos bancarios</strong> de tu empresa.
+                <br><br>
+                Esta acción <strong>NO se puede deshacer</strong>. Los datos se perderán permanentemente.
+                <br><br>
+                ¿Estás completamente seguro?
+            </p>
+
+            <form action="/limpiar_movimientos_bancarios" method="POST" style="margin-bottom: 1rem;">
+                <label style="color: #8d99ae; font-size: 0.85rem; display: block; margin-bottom: 8px;">
+                    Escribe <strong style="color: white;">CONFIRMO</strong> para confirmar:
+                </label>
+                <input type="text" name="confirmacion" placeholder="CONFIRMO" style="width: 100%; padding: 10px; background: #0b132b; color: white; border: 1px solid #dc3545; border-radius: 4px; margin-bottom: 1rem; font-size: 0.9rem;">
+
+                <div style="display: flex; gap: 8px;">
+                    <button type="submit" class="btn-neon" style="background: #dc3545; color: white; flex-grow: 1; padding: 10px;">
+                        ✓ Sí, Borrar Movimientos
+                    </button>
+                    <button type="button" onclick="cerrarModalBorrarMovimientos()" class="btn-neon" style="background: #0b132b; color: white; flex-grow: 1; padding: 10px; border: 1px solid var(--border-color);">
+                        ✗ Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 </div>
 
 <style>
@@ -266,4 +314,23 @@
 </style>
 
 <script src="{{ url_for('static', filename='js/configuracion.js') }}"></script>
+
+<script>
+function abrirModalBorrarMovimientos() {
+    document.getElementById('modalBorrar').style.display = 'flex';
+}
+
+function cerrarModalBorrarMovimientos() {
+    document.getElementById('modalBorrar').style.display = 'none';
+    document.querySelector('input[name="confirmacion"]').value = '';
+}
+
+// Cerrar modal si clickea afuera
+document.addEventListener('click', function(event) {
+    const modal = document.getElementById('modalBorrar');
+    if (event.target === modal) {
+        cerrarModalBorrarMovimientos();
+    }
+});
+</script>
 {% endblock %}

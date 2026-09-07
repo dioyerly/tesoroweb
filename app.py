@@ -5126,6 +5126,36 @@ def api_sociedades():
   return jsonify([{'id': s.id, 'nombre': s.nombre} for s in sociedades])
 
 
+@app.route('/limpiar_movimientos_bancarios', methods=['POST'])
+@login_required
+def limpiar_movimientos_bancarios():
+  if current_user.rol != 'Administrador':
+    flash('Solo administradores pueden realizar esta acción', 'danger')
+    return redirect(url_for('configuracion'))
+
+  try:
+    empresa_id = current_user.empresa_id
+    confirmacion = request.form.get('confirmacion')
+
+    if confirmacion != 'CONFIRMO':
+      flash('Confirmación inválida. Operación cancelada.', 'danger')
+      return redirect(url_for('configuracion'))
+
+    # Contar movimientos antes de borrar
+    cantidad = db.session.query(MovimientoBancario).filter_by(empresa_id=empresa_id).count()
+
+    # Borrar todos los movimientos bancarios de la empresa
+    db.session.query(MovimientoBancario).filter_by(empresa_id=empresa_id).delete()
+    db.session.commit()
+
+    flash(f'✓ Se borraron {cantidad} movimientos bancarios correctamente. Puedes subir un nuevo resumen limpio.', 'success')
+  except Exception as e:
+    db.session.rollback()
+    flash(f'Error al borrar movimientos: {str(e)[:100]}', 'danger')
+
+  return redirect(url_for('configuracion'))
+
+
 @app.route('/api/dashboard_data', methods=['GET'])
 @login_required
 def api_dashboard_data():
