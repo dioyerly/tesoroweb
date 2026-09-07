@@ -26,9 +26,12 @@ else:
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # --- CONFIGURACIÓN DE CARGA DE ARCHIVOS ---
-app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'uploads')
+if os.environ.get('RENDER'):
+    app.config['UPLOAD_FOLDER'] = '/tmp/tesoreria_uploads'
+else:
+    app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'uploads')
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
-    os.makedirs(app.config['UPLOAD_FOLDER'])
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 db.init_app(app)
 
