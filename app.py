@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 import hashlib
 import re
+from werkzeug.security import check_password_hash
 
 # ==================== CONFIGURACIÓN ====================
 st.set_page_config(
@@ -76,8 +77,8 @@ def login_page():
                 if resultado:
                     usuario_id, usuario_email, empresa_id, password_hash = resultado
 
-                    # Verificar contraseña (básico)
-                    if password_hash and len(password) > 0:
+                    # Verificar contraseña
+                    if check_password_hash(password_hash, password):
                         st.session_state.usuario_id = usuario_id
                         st.session_state.usuario_email = usuario_email
                         st.session_state.empresa_id = empresa_id
