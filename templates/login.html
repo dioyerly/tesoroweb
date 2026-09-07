@@ -7,7 +7,9 @@
 </head>
 <body style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: var(--bg-principal);">
     <div class="card" style="width: 100%; max-width: 400px; padding: 2rem;">
-        <h2 style="text-align: center; margin-bottom: 1.5rem; color: var(--neon-cyan);">⚡ Tesorería Multi-Empresa</h2>
+        <div style="text-align: center; margin-bottom: 2rem; display: flex; justify-content: center;">
+            <img src="{{ url_for('static', filename='img/tesoroweb-logo.png') }}" alt="TesoroWeb" style="height: 220px; width: auto; max-width: 100%;">
+        </div>
         
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}

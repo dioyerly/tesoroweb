@@ -10,7 +10,10 @@
 
     <!-- BARRA DE NAVEGACIÓN ÚNICA -->
     <nav class="navbar">
-        <div class="brand">⚡ Tesorería Multi-Empresa</div>
+        <a href="/" style="display: flex; align-items: center; gap: 8px; text-decoration: none; padding: 0;">
+            <img src="{{ url_for('static', filename='img/tesoroweb-logo-sin-nombre.png') }}" alt="TesoroWeb" style="height: 45px; width: auto;">
+            <div class="brand">TesoroWeb</div>
+        </a>
         {% if current_user.is_authenticated %}
         <div style="display: flex; gap: 8px; align-items: center;">
             {% if current_user.rol == 'SuperAdmin' %}
