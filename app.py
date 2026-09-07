@@ -5,10 +5,11 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify, s
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from models import db, Usuario, Empresa, Sociedad, BancoSociedad, Proveedor, FacturaPago, Recordatorio, Conciliacion, MovimientoBancario, MovimientoSplit, ConciliacionAuditoria
 from sqlalchemy.exc import IntegrityError
-import os, re, secrets, calendar, hashlib, pdfplumber, pandas as pd
+import os, re, secrets, calendar, hashlib, pdfplumber, csv
 from datetime import datetime, date, timedelta
 from io import BytesIO, StringIO
 from werkzeug.utils import secure_filename
+from openpyxl import Workbook, load_workbook
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['SECRET_KEY'] = os.environ.get(
@@ -1228,10 +1229,14 @@ def descargar_plantilla_proveedores():
       "NOMBRE": "Ejemplo Distribuidora S.A.",
       "CBU/ALIAS": "mi.alias.ejemplo",
   }]
-  df = pd.DataFrame(datos_ejemplo)
+  wb = Workbook()
+  ws = wb.active
+  ws.title = 'Proveedores'
+  ws.append(["CUIT", "NOMBRE", "CBU/ALIAS"])
+  for row in datos_ejemplo:
+    ws.append([row["CUIT"], row["NOMBRE"], row["CBU/ALIAS"]])
   output = BytesIO()
-  with pd.ExcelWriter(output, engine='openpyxl') as writer:
-    df.to_excel(writer, index=False, sheet_name='Proveedores')
+  wb.save(output)
   output.seek(0)
 
   return send_file(
@@ -1248,20 +1253,28 @@ def cargar_proveedores_excel():
   file = request.files.get('file_excel')
   if file and (file.filename.endswith('.xlsx') or file.filename.endswith('.xls')):
     try:
-      df = pd.read_excel(file)
-      df.columns = [str(c).strip().upper() for c in df.columns]
+      wb = load_workbook(file)
+      ws = wb.active
 
-      cuit_col = next((c for c in df.columns if 'CUIT' in c), None)
+      rows_data = []
+      headers = []
+      for idx, row in enumerate(ws.iter_rows(values_only=True), 1):
+        if idx == 1:
+          headers = [str(c).strip().upper() if c else '' for c in row]
+        else:
+          rows_data.append(row)
+
+      cuit_col = next((c for c in headers if 'CUIT' in c), None)
       nombre_col = next(
           (
               c
-              for c in df.columns
+              for c in headers
               if 'NOMBRE' in c or 'RAZON' in c or 'PROVEEDOR' in c
           ),
           None,
       )
       cbu_col = next(
-          (c for c in df.columns if 'CBU' in c or 'ALIAS' in c), None
+          (c for c in headers if 'CBU' in c or 'ALIAS' in c), None
       )
 
       if not cuit_col or not nombre_col:
@@ -1272,12 +1285,16 @@ def cargar_proveedores_excel():
         )
         return redirect(url_for('configuracion'))
 
-      for _, row in df.iterrows():
-        cuit_raw = str(row[cuit_col]).replace('-', '').replace('.0', '').strip()
-        nombre_raw = str(row[nombre_col]).strip()
+      cuit_idx = headers.index(cuit_col)
+      nombre_idx = headers.index(nombre_col)
+      cbu_idx = headers.index(cbu_col) if cbu_col else None
+
+      for row in rows_data:
+        cuit_raw = str(row[cuit_idx] or '').replace('-', '').replace('.0', '').strip()
+        nombre_raw = str(row[nombre_idx] or '').strip()
         cbu_raw = (
-            str(row[cbu_col]).strip()
-            if cbu_col and pd.notna(row[cbu_col])
+            str(row[cbu_idx]).strip()
+            if cbu_idx is not None and row[cbu_idx] is not None
             else ''
         )
 
@@ -2649,42 +2666,44 @@ def _leer_movimientos_banco(ruta_archivo):
   para que ambos queden visibles en la app."""
 
   if ruta_archivo.lower().endswith('.csv'):
-
     texto = _leer_texto_csv(ruta_archivo)
-
-    df = pd.read_csv(StringIO(texto), sep=None, engine='python')
-
+    reader = csv.DictReader(StringIO(texto))
+    rows = list(reader)
+    columnas = reader.fieldnames if reader.fieldnames else []
   else:
+    wb = load_workbook(ruta_archivo)
+    ws = wb.active
+    rows = []
+    columnas = []
+    for idx, row in enumerate(ws.iter_rows(values_only=True)):
+      if idx == 0:
+        columnas = [str(c).strip() if c else '' for c in row]
+      else:
+        rows.append(dict(zip(columnas, row)))
 
-    df = pd.read_excel(ruta_archivo)
+  columnas_normalizadas = {c: _normalizar_columna(str(c)) for c in columnas}
+  columnas = [columnas_normalizadas[c] for c in columnas]
+  for row in rows:
+    for old_col in list(row.keys()):
+      new_col = columnas_normalizadas[old_col]
+      row[new_col] = row.pop(old_col)
 
+  unique_cols = []
+  seen = set()
+  for c in columnas:
+    if c not in seen:
+      unique_cols.append(c)
+      seen.add(c)
+  columnas = unique_cols
 
-
-  columnas_normalizadas = {c: _normalizar_columna(str(c)) for c in df.columns}
-
-  df = df.rename(columns=columnas_normalizadas)
-
-  # Descarta columnas repetidas (p. ej. columna extra por ';' final sin nombre)
-
-  df = df.loc[:, ~df.columns.duplicated()]
-
-
-
-  mapa_fecha = next((c for c in df.columns if 'fecha' in c), None)
-
+  mapa_fecha = next((c for c in columnas if 'fecha' in c), None)
   mapa_debito = next(
-
-      (c for c in df.columns if 'debit' in c or c.startswith('debe')), None
-
+      (c for c in columnas if 'debit' in c or c.startswith('debe')), None
   )
-
   mapa_credito = next(
-
-      (c for c in df.columns if 'credit' in c or c.startswith('haber')), None
-
+      (c for c in columnas if 'credit' in c or c.startswith('haber')), None
   )
-
-  mapa_monto = next((c for c in df.columns if 'monto' in c or 'importe' in c), None)
+  mapa_monto = next((c for c in columnas if 'monto' in c or 'importe' in c), None)
 
 
 
@@ -2699,24 +2718,24 @@ def _leer_movimientos_banco(ruta_archivo):
 
 
   columnas_desc = [
-
       c
-
-      for c in df.columns
-
+      for c in columnas
       if c not in (mapa_fecha, mapa_debito, mapa_credito, mapa_monto, 'saldo')
-
   ]
-
-
 
   movimientos = []
 
-  for _, fila in df.iterrows():
-
+  for fila in rows:
     try:
-
-      fecha = pd.to_datetime(fila[mapa_fecha], dayfirst=True).date()
+      fecha_str = str(fila.get(mapa_fecha, ''))
+      for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y', '%m/%d/%Y'):
+        try:
+          fecha = datetime.strptime(fecha_str, fmt).date()
+          break
+        except:
+          continue
+      else:
+        continue
 
     except Exception:
 
@@ -5002,14 +5021,18 @@ def descargar_reporte_conciliacion():
 
 
 
-  df = pd.DataFrame(datos)
+  wb = Workbook()
+  ws = wb.active
+  ws.title = 'Movimientos Banco'
+
+  if datos:
+    headers = list(datos[0].keys())
+    ws.append(headers)
+    for row_data in datos:
+      ws.append([row_data.get(h, '') for h in headers])
 
   output = BytesIO()
-
-  with pd.ExcelWriter(output, engine='openpyxl') as writer:
-
-    df.to_excel(writer, index=False, sheet_name='Movimientos Banco')
-
+  wb.save(output)
   output.seek(0)
 
 
