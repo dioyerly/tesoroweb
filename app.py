@@ -17,7 +17,9 @@ app.config['SECRET_KEY'] = os.environ.get(
 )
 database_url = os.environ.get('DATABASE_URL')
 if database_url:
-    database_url = database_url.replace('postgres://', 'postgresql://')
+    database_url = database_url.replace('postgres://', 'postgresql+psycopg://', 1)
+    if database_url.startswith('postgresql://'):
+        database_url = database_url.replace('postgresql://', 'postgresql+psycopg://', 1)
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 else:
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///tesoreria.db'
