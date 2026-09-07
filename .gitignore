@@ -31,9 +31,7 @@ wheels/
 *~
 .DS_Store
 
-# Base de datos
-*.db
-tesoreria.db
+# Base de datos (tesoreria.db se versionará para Render)
 
 # Uploads
 uploads/
