@@ -15,7 +15,12 @@ app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['SECRET_KEY'] = os.environ.get(
     'SECRET_KEY', 'f8a2c91e4b7d3f6a0c5e8b2d7f4a1c9e6b3d8f5a2c7e0b4d9f6a3c8e5b2d7f4a'
 )
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///tesoreria.db'
+database_url = os.environ.get('DATABASE_URL')
+if database_url:
+    database_url = database_url.replace('postgres://', 'postgresql://')
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///tesoreria.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # --- CONFIGURACIÓN DE CARGA DE ARCHIVOS ---
