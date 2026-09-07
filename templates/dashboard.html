@@ -63,11 +63,11 @@
             </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-weight: bold; color: white; font-size: 0.8rem; margin-bottom: 8px;">
+        <div style="display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-weight: bold; color: white; font-size: 0.9rem; margin-bottom: 12px;">
             <div>Dom</div><div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div>
         </div>
 
-        <div id="grid_dias" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center;"></div>
+        <div id="grid_dias" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center;"></div>
 
         <p style="color: var(--text-muted); font-size: 0.75rem; margin-top: 10px; margin-bottom: 0; display: flex; align-items: center; gap: 6px;">
             <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #ffc107;"></span>
@@ -99,18 +99,18 @@
             <option value="quincenal_laborable">Repetición: Quincenal Laborable (días 1 y 15, ajustado a día hábil)</option>
         </select>
 
-        <ul id="lista_recordatorios" style="list-style: none; padding: 0; margin: 0; max-height: 320px; overflow-y: auto; flex-grow: 1;"></ul>
+        <ul id="lista_recordatorios" style="list-style: none; padding: 0; margin: 0; max-height: 450px; overflow-y: auto; flex-grow: 1;"></ul>
     </div>
 </div>
 
 <style>
 .dia-cal {
     position: relative;
-    padding: 8px 0;
+    padding: 14px 0;
     border-radius: 4px;
     background: rgba(255,255,255,0.03);
     color: white;
-    font-size: 0.85rem;
+    font-size: 1rem;
     cursor: pointer;
     border: 1px solid transparent;
 }
