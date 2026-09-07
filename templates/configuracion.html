@@ -4,10 +4,11 @@
 <h1 style="margin-bottom: 1.5rem;">Panel de Administración y Configuración</h1>
 
 <!-- NAVEGACIÓN POR PESTAÑAS -->
-<div style="display: flex; gap: 10px; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+<div style="display: flex; gap: 10px; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; flex-wrap: wrap;">
     <button id="btn-tab-sociedades" class="btn-tab" onclick="cambiarPestana('tab-sociedades')">🏢 Sociedades y Bancos</button>
     <button id="btn-tab-proveedores" class="btn-tab" onclick="cambiarPestana('tab-proveedores')">👥 Proveedores Registrados</button>
     <button id="btn-tab-usuarios" class="btn-tab" onclick="cambiarPestana('tab-usuarios')">👔 Usuarios / Empleados y Permisos</button>
+    <button id="btn-tab-admin" class="btn-tab" onclick="cambiarPestana('tab-admin')">⚙️ Administración de Datos</button>
 </div>
 
 <!-- PESTAÑA 1: SOCIEDADES Y BANCOS -->
@@ -247,53 +248,63 @@
         </div>
     </div>
 
-    <!-- ADMINISTRACIÓN DE DATOS -->
-    <div style="margin-top: 2rem;">
-        <h2 style="color: var(--neon-cyan); margin-bottom: 1rem;">⚙️ Administración de Datos</h2>
+</div>
 
-        <div class="card" style="padding: 1.5rem; border: 1px solid #dc3545;">
-            <h3 style="margin-top: 0; color: #dc3545; font-size: 0.9rem;">🗑️ Limpiar Movimientos Bancarios</h3>
-            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
-                Borra TODOS los movimientos bancarios subidos. Usa esto si necesitas resubir un resumen limpio desde el inicio.
-                <strong>⚠️ Esta acción es irreversible.</strong>
-            </p>
+<!-- PESTAÑA 4: ADMINISTRACIÓN DE DATOS -->
+<div id="tab-admin" class="tab-content" style="display: none;">
+    <div class="card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+        <h2 style="margin-top: 0; color: var(--neon-cyan);">⚙️ Administración de Movimientos Bancarios</h2>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
+            Gestiona los movimientos bancarios cargados. Puedes borrar movimientos seleccionados o todos de una vez.
+        </p>
 
-            <button type="button" onclick="abrirModalBorrarMovimientos()" class="btn-neon" style="background: #dc3545; color: white; padding: 10px 16px;">
-                🗑️ Borrar Todos los Movimientos
+        <!-- FILTRO POR FECHA -->
+        <div style="display: flex; gap: 8px; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: center;">
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <label style="color: var(--text-muted); font-size: 0.85rem;">Desde:</label>
+                <input type="date" id="filtroFechaDesde" style="padding: 8px; background: #0b132b; color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+                <label style="color: var(--text-muted); font-size: 0.85rem;">Hasta:</label>
+                <input type="date" id="filtroFechaHasta" style="padding: 8px; background: #0b132b; color: white; border: 1px solid var(--border-color); border-radius: 4px;">
+                <button type="button" onclick="filtrarPorFecha()" class="btn-neon" style="background: #17a2b8; color: white; padding: 8px 12px; font-size: 0.85rem;">
+                    🔍 Filtrar
+                </button>
+                <button type="button" onclick="limpiarFiltro()" class="btn-neon" style="background: #6c757d; color: white; padding: 8px 12px; font-size: 0.85rem;">
+                    ✕ Limpiar
+                </button>
+            </div>
+            <span id="contadorFiltro" style="color: var(--neon-cyan); font-size: 0.85rem;"></span>
+        </div>
+
+        <!-- BOTONES DE ACCIÓN -->
+        <div style="display: flex; gap: 8px; margin-bottom: 1.5rem; flex-wrap: wrap;">
+            <button type="button" onclick="abrirModalBorrarSeleccionados()" class="btn-neon" style="background: #ffc107; color: black; padding: 10px 16px;">
+                🗑️ Borrar Seleccionados
+            </button>
+            <button type="button" onclick="abrirModalBorrarTodos()" class="btn-neon" style="background: #dc3545; color: white; padding: 10px 16px;">
+                ☠️ Borrar TODOS
             </button>
         </div>
-    </div>
 
-    <!-- MODAL DE CONFIRMACIÓN -->
-    <div id="modalBorrar" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
-        <div class="card" style="width: 90%; max-width: 500px; padding: 2rem;">
-            <h2 style="color: #dc3545; margin-top: 0;">⚠️ Confirmación Requerida</h2>
-            <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
-                Estás a punto de <strong>borrar TODOS los movimientos bancarios</strong> de tu empresa.
-                <br><br>
-                Esta acción <strong>NO se puede deshacer</strong>. Los datos se perderán permanentemente.
-                <br><br>
-                ¿Estás completamente seguro?
-            </p>
-
-            <form action="/limpiar_movimientos_bancarios" method="POST" style="margin-bottom: 1rem;">
-                <label style="color: #8d99ae; font-size: 0.85rem; display: block; margin-bottom: 8px;">
-                    Escribe <strong style="color: white;">CONFIRMO</strong> para confirmar:
-                </label>
-                <input type="text" name="confirmacion" placeholder="CONFIRMO" style="width: 100%; padding: 10px; background: #0b132b; color: white; border: 1px solid #dc3545; border-radius: 4px; margin-bottom: 1rem; font-size: 0.9rem;">
-
-                <div style="display: flex; gap: 8px;">
-                    <button type="submit" class="btn-neon" style="background: #dc3545; color: white; flex-grow: 1; padding: 10px;">
-                        ✓ Sí, Borrar Movimientos
-                    </button>
-                    <button type="button" onclick="cerrarModalBorrarMovimientos()" class="btn-neon" style="background: #0b132b; color: white; flex-grow: 1; padding: 10px; border: 1px solid var(--border-color);">
-                        ✗ Cancelar
-                    </button>
-                </div>
-            </form>
+        <!-- TABLA DE MOVIMIENTOS -->
+        <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 6px;">
+            <table style="width: 100%; font-size: 0.85rem; color: white;">
+                <thead style="background: #0b132b; border-bottom: 1px solid var(--border-color);">
+                    <tr>
+                        <th style="padding: 12px; text-align: left;">
+                            <input type="checkbox" id="selectAll" onchange="seleccionarTodos(this.checked)" style="cursor: pointer;">
+                        </th>
+                        <th style="padding: 12px; text-align: left;">Fecha</th>
+                        <th style="padding: 12px; text-align: left;">Descripción</th>
+                        <th style="padding: 12px; text-align: right;">Monto</th>
+                        <th style="padding: 12px; text-align: center;">Tipo</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaMovimientos">
+                    <tr><td colspan="5" style="padding: 20px; text-align: center; color: #8d99ae;">Cargando movimientos...</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
-
 </div>
 
 <style>
@@ -315,21 +326,66 @@
 
 <script src="{{ url_for('static', filename='js/configuracion.js') }}"></script>
 
+<!-- MODALES -->
+<div id="modalBorrarSeleccionados" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+    <div class="card" style="width: 90%; max-width: 500px; padding: 2rem;">
+        <h2 style="color: #ffc107; margin-top: 0;">⚠️ Confirmar Eliminación</h2>
+        <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+            Estás a punto de borrar <strong id="cantMovimientos">0</strong> movimientos bancarios seleccionados.
+            <br><br>
+            Esta acción <strong>NO se puede deshacer</strong>.
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+            <label style="color: #8d99ae; font-size: 0.85rem; display: block;">
+                Escribe <strong style="color: white;">CONFIRMO</strong> para confirmar:
+            </label>
+            <input type="text" name="confirmacion" placeholder="CONFIRMO" style="width: 100%; padding: 10px; background: #0b132b; color: white; border: 1px solid #ffc107; border-radius: 4px; font-size: 0.9rem;">
+            <input type="hidden" id="idsMovimientos" value="">
+
+            <div style="display: flex; gap: 8px;">
+                <button type="button" onclick="confirmarBorrarSeleccionados()" class="btn-neon" style="background: #ffc107; color: black; flex-grow: 1; padding: 10px;">
+                    ✓ Sí, Borrar Seleccionados
+                </button>
+                <button type="button" onclick="cerrarModal('modalBorrarSeleccionados')" class="btn-neon" style="background: #0b132b; color: white; flex-grow: 1; padding: 10px; border: 1px solid var(--border-color);">
+                    ✗ Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="modalBorrarTodos" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+    <div class="card" style="width: 90%; max-width: 500px; padding: 2rem;">
+        <h2 style="color: #dc3545; margin-top: 0;">☠️ PELIGRO - Borrar TODOS</h2>
+        <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+            Estás a punto de <strong>BORRAR TODOS los movimientos bancarios</strong> de tu empresa.
+            <br><br>
+            Esta acción <strong>NO se puede deshacer</strong>. Perderás TODOS los datos cargados.
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+            <label style="color: #8d99ae; font-size: 0.85rem; display: block;">
+                Escribe <strong style="color: white;">CONFIRMO</strong> para confirmar:
+            </label>
+            <input type="text" name="confirmacion" placeholder="CONFIRMO" style="width: 100%; padding: 10px; background: #0b132b; color: white; border: 1px solid #dc3545; border-radius: 4px; font-size: 0.9rem;">
+
+            <div style="display: flex; gap: 8px;">
+                <button type="button" onclick="confirmarBorrarTodos()" class="btn-neon" style="background: #dc3545; color: white; flex-grow: 1; padding: 10px;">
+                    ✓ Sí, Borrar TODOS
+                </button>
+                <button type="button" onclick="cerrarModal('modalBorrarTodos')" class="btn-neon" style="background: #0b132b; color: white; flex-grow: 1; padding: 10px; border: 1px solid var(--border-color);">
+                    ✗ Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
-function abrirModalBorrarMovimientos() {
-    document.getElementById('modalBorrar').style.display = 'flex';
-}
-
-function cerrarModalBorrarMovimientos() {
-    document.getElementById('modalBorrar').style.display = 'none';
-    document.querySelector('input[name="confirmacion"]').value = '';
-}
-
-// Cerrar modal si clickea afuera
 document.addEventListener('click', function(event) {
-    const modal = document.getElementById('modalBorrar');
-    if (event.target === modal) {
-        cerrarModalBorrarMovimientos();
+    if (event.target.id === 'modalBorrarSeleccionados' || event.target.id === 'modalBorrarTodos') {
+        cerrarModal(event.target.id);
     }
 });
 </script>

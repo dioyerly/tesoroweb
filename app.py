@@ -445,54 +445,92 @@ def extraer_datos_pdf(ruta_pdf):
   tipo_gasto = "proveedor"
   fecha_vencimiento = None
 
-  # 1. EXTRACCIÓN INTELIGENTE DE CUIT DEL EMISOR
- 
-  empresa_actual = db.session.get(Empresa, current_user.empresa_id)
-  cuit_propio_normalizado = normalizar_cuit(empresa_actual.cuit) if empresa_actual else None
-
-  texto_cabecera = re.split(
-      r"CLIENTE:|SEÑOR\(ES\):|SEÑOR/ES|SR\(ES\):|SRES\.:|SRES:|DATOS DEL COMPRADOR",
-      texto,
-      flags=re.IGNORECASE,
-  )[0]
-  candidatos_cuit = re.findall(r"\b\d{11}\b|\b\d{2}-\d{8}-\d\b", texto_cabecera)
-  candidatos_cuit = [c for c in candidatos_cuit if normalizar_cuit(c) != cuit_propio_normalizado]
-
-  if not candidatos_cuit:
-    todos_los_cuits = re.findall(r"\b\d{11}\b|\b\d{2}-\d{8}-\d\b", texto)
-    candidatos_cuit = [c for c in todos_los_cuits if normalizar_cuit(c) != cuit_propio_normalizado]
-
-  if candidatos_cuit:
-    cuit = normalizar_cuit(candidatos_cuit[0])
-
-  # 2. CONSULTA APRENDIZAJE EN BASE DE DATOS (POR CUIT Y POR NOMBRE)
+  # 0. DETECCIÓN TEMPRANA DE VEP / SERVICIOS TRIBUTARIOS (ANTES DE BUSCAR EN BD)
+  es_vep = False
   prov_existente = None
-  if cuit:
-    cuit_normalizado_pdf = normalizar_cuit(cuit)
-    for p_bd in Proveedor.query.filter_by(empresa_id=current_user.empresa_id).all():
-      if normalizar_cuit(p_bd.cuit) == cuit_normalizado_pdf:
-        prov_existente = p_bd
-        break
 
-  # Búsqueda secundaria en BD por coincidencia de nombre
-  if not prov_existente:
-    texto_limpio = re.sub(r"[^A-Z0-9\s]", "", texto_upper)
-    proveedores_bd = Proveedor.query.filter_by(
-        empresa_id=current_user.empresa_id
-    ).all()
-    for p in proveedores_bd:
-      nom_db = p.nombre.upper()
-      nom_base = re.sub(
-          r"\b(SA|SRL|SH|SAS|SOCIEDAD ANONIMA)\b", "", nom_db
-      ).strip()
-      nom_base_limpio = re.sub(r"[^A-Z0-9\s]", "", nom_base)
-      if len(nom_base_limpio) > 3 and nom_base_limpio in texto_limpio:
-        prov_existente = p
-        break
+  if (
+      "VOLANTE ELECTRÓNICO DE PAGO" in texto_upper
+      or "ARCA VEP" in texto_upper
+      or "NRO. VEP:" in texto_upper
+  ):
+    es_vep = True
+    tipo_gasto = "servicio"
+    cuit = None  # VEP no tiene CUIT de proveedor
+    if "GANANCIAS" in texto_upper:
+      razon_social = "ARCA"
+    elif (
+        "SICOSS" in texto_upper
+        or "SEGURIDAD SOCIAL" in texto_upper
+        or "SEG. SOCIAL" in texto_upper
+    ):
+      razon_social = "ARCA"
+    elif "IVA" in texto_upper:
+      razon_social = "ARCA"
+    elif "IIBB" in texto_upper or "INGRESOS BRUTOS" in texto_upper:
+      razon_social = "ARCA"
+    else:
+      razon_social = "ARCA"
+    vep_match = re.search(r"NRO\.?\s*VEP:\s*(\d+)", texto_upper)
+    if vep_match:
+      nro_factura = f"VEP-{vep_match.group(1)}"
 
-  if prov_existente:
-    razon_social = prov_existente.nombre
-    cuit = prov_existente.cuit
+  elif "COMARB" in texto_upper or "SIFERE" in texto_upper:
+    es_vep = True
+    tipo_gasto = "servicio"
+    cuit = None
+    razon_social = "COMARB / SIFERE"
+    verif_match = re.search(r"N°?\s*VERIFICADOR:\s*(\d+)", texto_upper)
+    if verif_match:
+      nro_factura = f"VERIF-{verif_match.group(1)}"
+
+  # 1. EXTRACCIÓN INTELIGENTE DE CUIT DEL EMISOR (SOLO SI NO ES VEP)
+  if not es_vep:
+    empresa_actual = db.session.get(Empresa, current_user.empresa_id)
+    cuit_propio_normalizado = normalizar_cuit(empresa_actual.cuit) if empresa_actual else None
+
+    texto_cabecera = re.split(
+        r"CLIENTE:|SEÑOR\(ES\):|SEÑOR/ES|SR\(ES\):|SRES\.:|SRES:|DATOS DEL COMPRADOR",
+        texto,
+        flags=re.IGNORECASE,
+    )[0]
+    candidatos_cuit = re.findall(r"\b\d{11}\b|\b\d{2}-\d{8}-\d\b", texto_cabecera)
+    candidatos_cuit = [c for c in candidatos_cuit if normalizar_cuit(c) != cuit_propio_normalizado]
+
+    if not candidatos_cuit:
+      todos_los_cuits = re.findall(r"\b\d{11}\b|\b\d{2}-\d{8}-\d\b", texto)
+      candidatos_cuit = [c for c in todos_los_cuits if normalizar_cuit(c) != cuit_propio_normalizado]
+
+    if candidatos_cuit:
+      cuit = normalizar_cuit(candidatos_cuit[0])
+
+    # 2. CONSULTA APRENDIZAJE EN BASE DE DATOS (POR CUIT Y POR NOMBRE)
+    if cuit:
+      cuit_normalizado_pdf = normalizar_cuit(cuit)
+      for p_bd in Proveedor.query.filter_by(empresa_id=current_user.empresa_id).all():
+        if normalizar_cuit(p_bd.cuit) == cuit_normalizado_pdf:
+          prov_existente = p_bd
+          break
+
+    # Búsqueda secundaria en BD por coincidencia de nombre
+    if not prov_existente:
+      texto_limpio = re.sub(r"[^A-Z0-9\s]", "", texto_upper)
+      proveedores_bd = Proveedor.query.filter_by(
+          empresa_id=current_user.empresa_id
+      ).all()
+      for p in proveedores_bd:
+        nom_db = p.nombre.upper()
+        nom_base = re.sub(
+            r"\b(SA|SRL|SH|SAS|SOCIEDAD ANONIMA)\b", "", nom_db
+        ).strip()
+        nom_base_limpio = re.sub(r"[^A-Z0-9\s]", "", nom_base)
+        if len(nom_base_limpio) > 3 and nom_base_limpio in texto_limpio:
+          prov_existente = p
+          break
+
+    if prov_existente:
+      razon_social = prov_existente.nombre
+      cuit = prov_existente.cuit
 
   # 3. EXTRAER RAZÓN SOCIAL DEL EMISOR EN FACTURA COMERCIAL
   if not prov_existente:
@@ -647,34 +685,6 @@ def extraer_datos_pdf(ruta_pdf):
       if cta_match:
         nro_factura = f"UECARA-{cta_match.group(1)}"
 
-    elif (
-        "VOLANTE ELECTRÓNICO DE PAGO" in texto_upper
-        or "ARCA VEP" in texto_upper
-        or "NRO. VEP:" in texto_upper
-    ):
-      tipo_gasto = "servicio"
-      if "GANANCIAS" in texto_upper:
-        razon_social = "ARCA - VEP Ganancias"
-      elif (
-          "SICOSS" in texto_upper
-          or "SEGURIDAD SOCIAL" in texto_upper
-          or "SEG. SOCIAL" in texto_upper
-      ):
-        razon_social = "ARCA - VEP Seguridad Social (Cargas Sociales)"
-      elif "IVA" in texto_upper:
-        razon_social = "ARCA - VEP IVA"
-      else:
-        razon_social = "ARCA - VEP Impuestos"
-      vep_match = re.search(r"NRO\.?\s*VEP:\s*(\d+)", texto_upper)
-      if vep_match:
-        nro_factura = f"VEP-{vep_match.group(1)}"
-
-    elif "COMARB" in texto_upper or "SIFERE" in texto_upper:
-      tipo_gasto = "servicio"
-      razon_social = "COMARB / SIFERE - DDJJ IIBB"
-      verif_match = re.search(r"N°?\s*VERIFICADOR:\s*(\d+)", texto_upper)
-      if verif_match:
-        nro_factura = f"VERIF-{verif_match.group(1)}"
 
   if es_nombre_invalido(razon_social):
     razon_social = ""
@@ -1486,7 +1496,8 @@ def cargar_factura():
 
       datos = extraer_datos_pdf(ruta)
       proveedor = None
-      if datos['cuit']:
+      # Solo buscar en BD si NO es servicio/VEP y hay CUIT
+      if datos['tipo_gasto'] != 'servicio' and datos['cuit']:
           cuit_normalizado_pdf = normalizar_cuit(datos['cuit'])
           for p in Proveedor.query.filter_by(empresa_id=current_user.empresa_id).all():
               if normalizar_cuit(p.cuit) == cuit_normalizado_pdf:
@@ -1513,6 +1524,12 @@ def cargar_factura():
   )
 
 
+def detectar_vep(nro_factura, descripcion, forma_pago):
+  """Detecta si el comprobante es un VEP basándose en palabras clave"""
+  keywords_vep = ['vep', 'afip', 'arca', 'ganancia', 'iva', 'iibb', 'monotributo', 'sicore']
+  texto_buscar = (nro_factura + ' ' + descripcion + ' ' + forma_pago).lower()
+  return any(kw in texto_buscar for kw in keywords_vep)
+
 @app.route('/cargar_pago_manual', methods=['POST'])
 @login_required
 def cargar_pago_manual():
@@ -1525,9 +1542,14 @@ def cargar_pago_manual():
   tipo_gasto = request.form.get('tipo_gasto', 'proveedor')
   forma_pago = request.form.get(
       'forma_pago', 'Transferencia'
-  )  # <-- NUEVO CAMPO
+  )
   numero_cheque = request.form.get('numero_cheque', '').strip() or None
   descripcion = request.form.get('descripcion', '')
+
+  # Detectar si es un VEP
+  if detectar_vep(nro_factura, descripcion, forma_pago):
+    tipo_gasto = 'servicio'
+    proveedor_id = None
 
   fecha_venc_str = request.form.get('fecha_vencimiento')
   fecha_prog_str = request.form.get('fecha_pago_programada')
@@ -1583,9 +1605,14 @@ def confirmar_factura():
   tipo_gasto = request.form.get('tipo_gasto', 'proveedor')
   forma_pago = request.form.get(
       'forma_pago', 'Transferencia'
-  )  # <-- NUEVO CAMPO
+  )
   numero_cheque = request.form.get('numero_cheque', '').strip() or None
   descripcion = request.form.get('descripcion', '')
+
+  # Detectar si es un VEP
+  if detectar_vep(nro_factura, descripcion, forma_pago):
+    tipo_gasto = 'servicio'
+    proveedor_id = None
 
   fecha_venc_str = request.form.get('fecha_vencimiento')
   fecha_prog_str = request.form.get('fecha_pago_programada')
@@ -5126,34 +5153,78 @@ def api_sociedades():
   return jsonify([{'id': s.id, 'nombre': s.nombre} for s in sociedades])
 
 
+@app.route('/api/movimientos_bancarios', methods=['GET'])
+@login_required
+def api_movimientos_bancarios():
+  empresa_id = current_user.empresa_id
+  movimientos = db.session.query(MovimientoBancario).filter_by(empresa_id=empresa_id).order_by(MovimientoBancario.fecha.desc()).limit(1000).all()
+
+  return jsonify([{
+    'id': m.id,
+    'fecha': m.fecha.strftime('%d/%m/%Y'),
+    'descripcion': m.descripcion,
+    'monto': m.monto,
+    'tipo': m.tipo
+  } for m in movimientos])
+
+
+@app.route('/borrar_movimientos_seleccionados', methods=['POST'])
+@login_required
+def borrar_movimientos_seleccionados():
+  if current_user.rol != 'Administrador':
+    return jsonify({'status': 'error', 'message': 'Solo administradores pueden realizar esta acción'}), 403
+
+  try:
+    data = request.get_json()
+    confirmacion = data.get('confirmacion', '')
+    ids_str = data.get('ids', '')
+
+    if confirmacion != 'CONFIRMO':
+      return jsonify({'status': 'error', 'message': 'Confirmación inválida'})
+
+    if not ids_str:
+      return jsonify({'status': 'error', 'message': 'No hay movimientos seleccionados'})
+
+    ids = [int(id_str) for id_str in ids_str.split(',') if id_str.strip()]
+
+    if not ids:
+      return jsonify({'status': 'error', 'message': 'IDs inválidos'})
+
+    db.session.query(MovimientoBancario).filter(
+      MovimientoBancario.id.in_(ids),
+      MovimientoBancario.empresa_id == current_user.empresa_id
+    ).delete()
+    db.session.commit()
+
+    return jsonify({'status': 'ok', 'message': f'Se borraron {len(ids)} movimientos'})
+  except Exception as e:
+    db.session.rollback()
+    return jsonify({'status': 'error', 'message': f'Error: {str(e)[:100]}'})
+
+
 @app.route('/limpiar_movimientos_bancarios', methods=['POST'])
 @login_required
 def limpiar_movimientos_bancarios():
   if current_user.rol != 'Administrador':
-    flash('Solo administradores pueden realizar esta acción', 'danger')
-    return redirect(url_for('configuracion'))
+    return jsonify({'status': 'error', 'message': 'Solo administradores pueden realizar esta acción'}), 403
 
   try:
     empresa_id = current_user.empresa_id
-    confirmacion = request.form.get('confirmacion')
+    data = request.get_json()
+    confirmacion = data.get('confirmacion', '')
 
     if confirmacion != 'CONFIRMO':
-      flash('Confirmación inválida. Operación cancelada.', 'danger')
-      return redirect(url_for('configuracion'))
+      return jsonify({'status': 'error', 'message': 'Confirmación inválida'})
 
-    # Contar movimientos antes de borrar
     cantidad = db.session.query(MovimientoBancario).filter_by(empresa_id=empresa_id).count()
 
-    # Borrar todos los movimientos bancarios de la empresa
     db.session.query(MovimientoBancario).filter_by(empresa_id=empresa_id).delete()
     db.session.commit()
 
-    flash(f'✓ Se borraron {cantidad} movimientos bancarios correctamente. Puedes subir un nuevo resumen limpio.', 'success')
+    return jsonify({'status': 'ok', 'message': f'Se borraron {cantidad} movimientos'})
   except Exception as e:
     db.session.rollback()
-    flash(f'Error al borrar movimientos: {str(e)[:100]}', 'danger')
-
-  return redirect(url_for('configuracion'))
+    return jsonify({'status': 'error', 'message': f'Error: {str(e)[:100]}'})
 
 
 @app.route('/api/dashboard_data', methods=['GET'])

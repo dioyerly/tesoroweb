@@ -65,6 +65,9 @@
             <label style="color: var(--text-muted); font-size: 0.8rem;">Descripción / Nota (Opcional):</label>
             <input type="text" name="descripcion" placeholder="Ej: AySA Paternal / VEP Anticipo IIBB" style="width: 100%; padding: 7px; margin-bottom: 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
 
+            <label style="color: var(--text-muted); font-size: 0.8rem;">Fecha de Vencimiento:</label>
+            <input type="date" name="fecha_vencimiento" style="width: 100%; padding: 8px; margin-bottom: 12px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-principal); color: white;">
+
             <label style="color: var(--text-muted); font-size: 0.8rem;">Fecha Programada de Pago:</label>
             <div style="display: flex; gap: 6px; margin-bottom: 6px;">
                 <button type="button" onclick="setFechaPago('fecha_pago_manual', 2)" class="btn-neon" style="padding: 5px 10px; font-size: 0.75rem; flex: 1;">📅 Próx. Martes</button>
@@ -115,18 +118,24 @@
                         {% endif %}
                     </div>
                 </div>
-                <input type="text" id="nombre_emisor_editable" value="{{ datos.razon_social }}" list="lista_proveedores_datalist" autocomplete="off" style="width: 100%; padding: 6px; margin-top: 2px; border-radius: 4px; border: 1px solid var(--neon-cyan); background: #0b132b; color: var(--neon-cyan); font-weight: bold; font-size: 0.95rem;">
+                <input type="text" id="nombre_emisor_editable" value="{{ datos.razon_social }}" list="lista_proveedores_datalist" autocomplete="off" style="width: 100%; padding: 6px; margin-top: 2px; border-radius: 4px; border: 1px solid var(--neon-cyan); background: #0b132b; color: var(--neon-cyan); font-weight: bold; font-size: 0.95rem;" {% if datos.tipo_gasto == 'servicio' %}readonly{% endif %}>
                 <datalist id="lista_proveedores_datalist">
                     {% for prov in proveedores %}
                     <option value="{{ prov.nombre }}" data-id="{{ prov.id }}" data-cuit="{{ prov.cuit }}" data-cbu="{{ prov.cbu_alias or '' }}"></option>
                     {% endfor %}
                 </datalist>
+                {% if datos.tipo_gasto != 'servicio' %}
                 <label style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 6px;">CUIT del Emisor (corregilo si el escaneo lo tomó mal):</label>
                 <input type="text" id="cuit_emisor_editable" value="{{ datos.cuit or '' }}" placeholder="Sin CUIT detectado" style="width: 100%; padding: 6px; margin-top: 2px; border-radius: 4px; border: 1px solid var(--border-color); background: #0b132b; color: white; font-size: 0.85rem;">
+                {% else %}
+                <div style="padding: 8px; background: rgba(46, 196, 182, 0.15); border: 1px solid #2ec4b6; border-radius: 4px; margin-top: 6px; color: #2ec4b6; font-size: 0.85rem;">
+                    ✓ Servicio/VEP - No requiere CUIT de proveedor
+                </div>
+                {% endif %}
             </div>
-            
+
             <!-- REGISTRO RÁPIDO PARA GUARDAR EL EMISOR Y SU CUIT -->
-            <div id="box_alta_rapida" style="border-top: 1px dashed rgba(255, 193, 7, 0.3); padding-top: 8px; display: flex; gap: 8px; align-items: center;">
+            <div id="box_alta_rapida" style="border-top: 1px dashed rgba(255, 193, 7, 0.3); padding-top: 8px; display: flex; gap: 8px; align-items: center;" {% if datos.tipo_gasto == 'servicio' %}style="display: none;"{% endif %}>
                 <input type="text" id="cbu_rapido" value="{{ proveedor.cbu_alias if proveedor and proveedor.cbu_alias else '' }}" placeholder="CBU / ALIAS (Opcional si es Servicio)" style="padding: 6px; border-radius: 4px; border: 1px solid #ffc107; background: #0b132b; color: white; flex-grow: 1; font-size: 0.85rem;">
                 <button type="button" onclick="guardarProveedorRapido()" class="btn-neon" style="padding: 6px 10px; font-size: 0.8rem;">⚡ Guardar Emisor / Aprendizaje</button>
             </div>
