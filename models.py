@@ -175,3 +175,11 @@ class ConciliacionAuditoria(db.Model):
   timestamp = db.Column(db.DateTime, default=datetime.utcnow)
   monto_conciliado = db.Column(db.Float, nullable=False)
   notas = db.Column(db.Text, nullable=True)
+
+
+class ContraseñaGuardada(db.Model):
+  __tablename__ = 'contraseña_guardada'
+  id = db.Column(db.Integer, primary_key=True)
+  usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+  contraseña = db.Column(db.String(255), nullable=False)
+  fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)

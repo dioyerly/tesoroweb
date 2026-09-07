@@ -14,6 +14,7 @@
                     <th style="padding: 10px; text-align: left;">Nombre</th>
                     <th style="padding: 10px; text-align: left;">Rol</th>
                     <th style="padding: 10px; text-align: left;">Estado</th>
+                    <th style="padding: 10px; text-align: left;">Contraseña</th>
                     <th style="padding: 10px; text-align: center;">Acciones</th>
                 </tr>
             </thead>
@@ -28,6 +29,13 @@
                             <span style="color: {% if u.activo %}#28a745{% else %}#dc3545{% endif %};">
                                 {{ 'ACTIVO' if u.activo else 'INACTIVO' }}
                             </span>
+                        </td>
+                        <td style="padding: 10px; font-family: monospace; color: #00b4d8; font-weight: bold;">
+                            {% if contraseñas.get(u.id) %}
+                                {{ contraseñas[u.id] }}
+                            {% else %}
+                                <span style="color: var(--text-muted); font-weight: normal;">Sin guardar</span>
+                            {% endif %}
                         </td>
                         <td style="padding: 10px; text-align: center;">
                             <button onclick="resetearContraseña({{ u.id }}, '{{ u.email }}')" class="btn-neon"

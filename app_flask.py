@@ -257,7 +257,16 @@ def usuarios_empresa(empresa_id):
         return redirect(url_for('panel_superadmin'))
 
     usuarios = Usuario.query.filter_by(empresa_id=empresa_id).all()
-    return render_template('admin/usuarios_empresa.html', empresa=empresa, usuarios=usuarios)
+
+    # Obtener contraseñas guardadas
+    from models import ContraseñaGuardada
+    contraseñas = {}
+    for usuario in usuarios:
+        cg = ContraseñaGuardada.query.filter_by(usuario_id=usuario.id).first()
+        if cg:
+            contraseñas[usuario.id] = cg.contraseña
+
+    return render_template('admin/usuarios_empresa.html', empresa=empresa, usuarios=usuarios, contraseñas=contraseñas)
 
 @app.route('/admin/ver_contraseña/<int:usuario_id>')
 @login_required
