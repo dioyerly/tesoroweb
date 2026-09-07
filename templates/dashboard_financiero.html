@@ -1,0 +1,386 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div style="padding: 2rem 0;">
+    <h1 style="margin-bottom: 0.5rem; font-size: 2rem; color: white;">Dashboard Financiero</h1>
+    <p style="color: #8d99ae; font-size: 0.85rem; margin-bottom: 1.5rem;">Resumen de ingresos, gastos y análisis financiero en tiempo real</p>
+
+    <!-- BARRA DE FILTROS COMPACTA -->
+    <div class="filtro-bar" style="background: #121829; padding: 1rem; border-radius: 6px; border: 1px solid #1e2139; height: auto; display: flex; align-items: center;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 0.75rem; align-items: center; width: 100%;">
+            <div>
+                <label style="color: #8d99ae; font-size: 0.7rem; text-transform: uppercase; display: block; margin-bottom: 4px;">Desde</label>
+                <input type="date" id="fecha_desde" style="width: 100%; padding: 6px; background: #0a0e1a; color: white; border: 1px solid #1e2139; border-radius: 4px; font-size: 0.85rem;">
+            </div>
+            <div>
+                <label style="color: #8d99ae; font-size: 0.7rem; text-transform: uppercase; display: block; margin-bottom: 4px;">Hasta</label>
+                <input type="date" id="fecha_hasta" style="width: 100%; padding: 6px; background: #0a0e1a; color: white; border: 1px solid #1e2139; border-radius: 4px; font-size: 0.85rem;">
+            </div>
+            <div>
+                <label style="color: #8d99ae; font-size: 0.7rem; text-transform: uppercase; display: block; margin-bottom: 4px;">Sociedad</label>
+                <select id="filtro_sociedad" style="width: 100%; padding: 6px; background: #0a0e1a; color: white; border: 1px solid #1e2139; border-radius: 4px; font-size: 0.85rem;">
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            <div>
+                <label style="color: #8d99ae; font-size: 0.7rem; text-transform: uppercase; display: block; margin-bottom: 4px;">Tipo Pago</label>
+                <select id="filtro_tipo_pago" style="width: 100%; padding: 6px; background: #0a0e1a; color: white; border: 1px solid #1e2139; border-radius: 4px; font-size: 0.85rem;">
+                    <option value="">Todos</option>
+                    <option value="Transferencia">Transferencia</option>
+                    <option value="Cheques / eCheqs">Cheques</option>
+                    <option value="VEP">VEP (Impuestos)</option>
+                </select>
+            </div>
+            <button type="button" onclick="aplicarFiltros()" class="btn-neon" style="padding: 6px 16px; align-self: flex-end; white-space: nowrap;">🔍 Filtrar</button>
+        </div>
+    </div>
+
+    <!-- TABS -->
+    <div class="tabs-container" style="margin: 1.5rem 0; display: flex; gap: 8px; flex-wrap: wrap;">
+        <button class="tab-btn-rounded active" onclick="cambiarTab('resumen')" style="padding: 10px 18px; border-radius: 20px; color: white; background: #00f5d4; font-weight: 600; cursor: pointer; font-size: 0.85rem; border: none; transition: all 0.3s ease;">📊 Resumen</button>
+        <button class="tab-btn-rounded" onclick="cambiarTab('analisis')" style="padding: 10px 18px; border-radius: 20px; color: #8d99ae; background: #121829; font-weight: 600; cursor: pointer; font-size: 0.85rem; border: 1px solid #1e2139; transition: all 0.3s ease;">🔍 Análisis Detallado</button>
+        <button class="tab-btn-rounded" onclick="cambiarTab('vencimientos')" style="padding: 10px 18px; border-radius: 20px; color: #8d99ae; background: #121829; font-weight: 600; cursor: pointer; font-size: 0.85rem; border: 1px solid #1e2139; transition: all 0.3s ease;">⏰ Vencimientos</button>
+    </div>
+
+    <!-- TAB 1: RESUMEN -->
+    <div id="tab-resumen" class="tab-content">
+        <!-- KPI CARDS -->
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; margin-bottom: 1.5rem;">
+            <div class="kpi-card" style="background: #121829; border: 1px solid #1e2139; border-radius: 6px; padding: 1.25rem; height: 110px;">
+                <div style="color: #8d99ae; font-size: 0.7rem; text-transform: uppercase; font-weight: 600; margin-bottom: 8px;">💰 Ingresos Operativos</div>
+                <div style="font-size: 1.75rem; font-weight: 700; color: #2ec4b6; margin-bottom: 6px;">$ <span id="kpi_ingresos">0,00</span></div>
+                <div style="font-size: 0.75rem; color: #00f5d4;">(Sin FIMA)</div>
+            </div>
+
+            <div class="kpi-card" style="background: #121829; border: 1px solid #1e2139; border-radius: 6px; padding: 1.25rem; height: 110px;">
+                <div style="color: #8d99ae; font-size: 0.7rem; text-transform: uppercase; font-weight: 600; margin-bottom: 8px;">📊 Gastos Operativos</div>
+                <div style="font-size: 1.75rem; font-weight: 700; color: #ff6b9d; margin-bottom: 6px;">$ <span id="kpi_gastos">0,00</span></div>
+                <div style="font-size: 0.75rem; color: #ff6b9d;">(Sin Bancarios)</div>
+            </div>
+
+            <div class="kpi-card" style="background: #121829; border: 1px solid #1e2139; border-radius: 6px; padding: 1.25rem; height: 110px;">
+                <div style="color: #8d99ae; font-size: 0.7rem; text-transform: uppercase; font-weight: 600; margin-bottom: 8px;">🏦 Gastos Bancarios</div>
+                <div style="font-size: 1.75rem; font-weight: 700; color: #a0aec0; margin-bottom: 6px;">$ <span id="kpi_gastos_bancarios">0,00</span></div>
+                <div style="font-size: 0.75rem; color: #8d99ae;">Impuestos, comisiones</div>
+            </div>
+
+            <div class="kpi-card" style="background: #121829; border: 1px solid #1e2139; border-radius: 6px; padding: 1.25rem; height: 110px;">
+                <div style="color: #8d99ae; font-size: 0.7rem; text-transform: uppercase; font-weight: 600; margin-bottom: 8px;">💎 Ganancia Real</div>
+                <div style="font-size: 1.75rem; font-weight: 700; color: #00f5d4; margin-bottom: 6px;">$ <span id="kpi_ganancia">0,00</span></div>
+                <div style="font-size: 0.75rem; color: #4cc9f0;">Operativo - Bancarios</div>
+            </div>
+        </div>
+
+        <!-- TARJETA GANANCIA/PÉRDIDA -->
+        <div class="card" style="padding: 2rem; margin-bottom: 1.5rem; background: linear-gradient(135deg, #0a0e1a 0%, #121829 100%); border: 2px solid #00f5d4;">
+            <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 2rem; align-items: center;">
+                <div style="text-align: center;">
+                    <div style="color: #8d99ae; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 8px; font-weight: 600;">💰 Ingresos Totales</div>
+                    <div style="font-size: 2.5rem; font-weight: 900; color: #2ec4b6;">$ <span id="ganancia_ingresos">0,00</span></div>
+                </div>
+
+                <div style="text-align: center;">
+                    <div style="font-size: 2.5rem; font-weight: 900; color: #00f5d4;" id="ganancia_resultado">$ 0,00</div>
+                    <div style="color: #8d99ae; font-size: 0.7rem; text-transform: uppercase; font-weight: 600; margin-top: 8px;">Ganancia Neta</div>
+                    <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; justify-content: center;">
+                        <button onclick="cambiarComparacion('ganancia')" class="btn-comparacion active" style="padding: 6px 12px; border-radius: 12px; border: 1px solid #00f5d4; color: white; background: transparent; font-size: 0.7rem; cursor: pointer; font-weight: 600;">Ganancia</button>
+                        <button onclick="cambiarComparacion('margen')" class="btn-comparacion" style="padding: 6px 12px; border-radius: 12px; border: 1px solid #1e2139; color: #8d99ae; background: transparent; font-size: 0.7rem; cursor: pointer; font-weight: 600;">Margen %</button>
+                        <button onclick="cambiarComparacion('solvencia')" class="btn-comparacion" style="padding: 6px 12px; border-radius: 12px; border: 1px solid #1e2139; color: #8d99ae; background: transparent; font-size: 0.7rem; cursor: pointer; font-weight: 600;">Solvencia</button>
+                    </div>
+                </div>
+
+                <div style="text-align: center;">
+                    <div style="color: #8d99ae; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 8px; font-weight: 600;">📊 Gastos Totales</div>
+                    <div style="font-size: 2.5rem; font-weight: 900; color: #ff6b9d;">$ <span id="ganancia_gastos">0,00</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GRÁFICOS -->
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.25rem;">
+            <div class="card" style="padding: 1.5rem;">
+                <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 0.9rem; color: white;">Flujo de Caja (Últimos 15 días)</h3>
+                <div id="chartEvolucion" style="min-height: 300px;"></div>
+            </div>
+
+            <div class="card" style="padding: 1.5rem;">
+                <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 0.9rem; color: white;">Gastos por Tipo</h3>
+                <div id="chartDesglose" style="width: 100%; min-height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: ANÁLISIS DETALLADO -->
+    <div id="tab-analisis" class="tab-content" style="display: none;">
+        <!-- TARJETAS DE MÉTRICAS -->
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; margin-bottom: 1.5rem;">
+            <div class="card" style="padding: 1.5rem; text-align: center;">
+                <div style="color: #8d99ae; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 12px; font-weight: 600;">📈 Ratio de Solvencia</div>
+                <div style="font-size: 2rem; font-weight: 900; color: #2ec4b6; margin-bottom: 8px;"><span id="metrica_solvencia">0.00</span>x</div>
+                <div style="font-size: 0.75rem; color: #8d99ae;">Capacidad de pagar gastos</div>
+            </div>
+
+            <div class="card" style="padding: 1.5rem; text-align: center;">
+                <div style="color: #8d99ae; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 12px; font-weight: 600;">⏳ Días de Caja</div>
+                <div style="font-size: 2rem; font-weight: 900; color: #00f5d4; margin-bottom: 8px;"><span id="metrica_dias_caja">0</span> días</div>
+                <div style="font-size: 0.75rem; color: #8d99ae;">Sostenibilidad con saldo actual</div>
+            </div>
+
+            <div class="card" style="padding: 1.5rem; text-align: center;">
+                <div style="color: #8d99ae; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 12px; font-weight: 600;">📊 Margen Neto</div>
+                <div style="font-size: 2rem; font-weight: 900; color: #4cc9f0; margin-bottom: 8px;"><span id="metrica_margen">0</span>%</div>
+                <div style="font-size: 0.75rem; color: #8d99ae;">Rentabilidad (Ganancia/Ingresos)</div>
+            </div>
+        </div>
+
+        <!-- TABLA DE DETALLES -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
+            <div class="card" style="padding: 1.5rem;">
+                <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 0.9rem; color: white;">📋 Desglose de Gastos</h3>
+                <table style="width: 100%; font-size: 0.85rem; color: white;">
+                    <tr style="border-bottom: 1px solid #1e2139;">
+                        <td style="padding: 8px 0; color: #8d99ae;">Transferencias</td>
+                        <td style="padding: 8px 0; text-align: right; color: #2ec4b6; font-weight: 600;">$ <span id="detalle_transferencias">0,00</span></td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #1e2139;">
+                        <td style="padding: 8px 0; color: #8d99ae;">Servicios/Pagos</td>
+                        <td style="padding: 8px 0; text-align: right; color: #2ec4b6; font-weight: 600;">$ <span id="detalle_servicios">0,00</span></td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #1e2139;">
+                        <td style="padding: 8px 0; color: #8d99ae;">VEP (Impuestos)</td>
+                        <td style="padding: 8px 0; text-align: right; color: #2ec4b6; font-weight: 600;">$ <span id="detalle_vep">0,00</span></td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #1e2139;">
+                        <td style="padding: 8px 0; color: #8d99ae;">Cheques/eCheques</td>
+                        <td style="padding: 8px 0; text-align: right; color: #2ec4b6; font-weight: 600;">$ <span id="detalle_cheques">0,00</span></td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #1e2139;">
+                        <td style="padding: 8px 0; color: #8d99ae;">Efectivo</td>
+                        <td style="padding: 8px 0; text-align: right; color: #2ec4b6; font-weight: 600;">$ <span id="detalle_efectivo">0,00</span></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 0; color: #8d99ae;">Tarjeta</td>
+                        <td style="padding: 8px 0; text-align: right; color: #2ec4b6; font-weight: 600;">$ <span id="detalle_tarjeta">0,00</span></td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="card" style="padding: 1.5rem;">
+                <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 0.9rem; color: white;">🏆 Top 5 Proveedores</h3>
+                <div id="topProveedores" style="font-size: 0.85rem;">
+                    <p style="color: #8d99ae;">Cargando...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: VENCIMIENTOS CRÍTICOS -->
+    <div id="tab-vencimientos" class="tab-content" style="display: none;">
+        <div class="card" style="padding: 1.5rem;">
+            <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 0.9rem; color: white;">⏰ Vencimientos Próximos (30 días)</h3>
+            <div id="listaVencimientos" style="max-height: 600px; overflow-y: auto; font-size: 0.85rem;">
+                <p style="color: #8d99ae; text-align: center;">Cargando...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/apexcharts/3.45.0/apexcharts.min.js"></script>
+<script>
+function formatoContable(numero) {
+    return numero.toLocaleString('es-AR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+let chartEvolucion, chartDesglose;
+let datos_dashboard = {};
+
+document.addEventListener('DOMContentLoaded', function() {
+    const hoy = new Date();
+    const hace30 = new Date(hoy.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    document.getElementById('fecha_desde').value = hace30.toISOString().split('T')[0];
+    document.getElementById('fecha_hasta').value = hoy.toISOString().split('T')[0];
+
+    aplicarFiltros();
+    cargarSociedades();
+});
+
+function cargarSociedades() {
+    fetch('/api/sociedades')
+        .then(r => r.json())
+        .then(data => {
+            const select = document.getElementById('filtro_sociedad');
+            data.forEach(soc => {
+                const opt = document.createElement('option');
+                opt.value = soc.id;
+                opt.textContent = soc.nombre;
+                select.appendChild(opt);
+            });
+        });
+}
+
+function cambiarTab(tabName) {
+    document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+    document.getElementById('tab-' + tabName).style.display = 'block';
+
+    document.querySelectorAll('.tab-btn-rounded').forEach(btn => {
+        btn.style.color = '#8d99ae';
+        btn.style.background = '#121829';
+        btn.style.borderColor = '#1e2139';
+    });
+    event.target.style.color = 'white';
+    event.target.style.background = '#00f5d4';
+    event.target.style.borderColor = '#00f5d4';
+}
+
+let modo_comparacion = 'ganancia';
+
+function cambiarComparacion(tipo) {
+    modo_comparacion = tipo;
+    const d = datos_dashboard;
+    const ingresos_op = d.ingresos_operativos || 0;
+    const gastos_op = d.gastos_operativos || 0;
+    const gastos_banc = d.gastos_bancarios || 0;
+    const ganancia_real = ingresos_op - gastos_op - gastos_banc;
+
+    document.querySelectorAll('.btn-comparacion').forEach(btn => {
+        btn.style.borderColor = '#1e2139';
+        btn.style.color = '#8d99ae';
+    });
+    event.target.style.borderColor = '#00f5d4';
+    event.target.style.color = 'white';
+
+    let resultado;
+    if (tipo === 'ganancia') {
+        resultado = ganancia_real;
+        document.getElementById('ganancia_resultado').textContent = '$ ' + formatoContable(resultado);
+    } else if (tipo === 'margen') {
+        resultado = ingresos_op > 0 ? ((ganancia_real) / ingresos_op * 100) : 0;
+        document.getElementById('ganancia_resultado').textContent = resultado.toFixed(1) + '%';
+    } else if (tipo === 'solvencia') {
+        resultado = gastos_op > 0 ? (ingresos_op / gastos_op) : 0;
+        document.getElementById('ganancia_resultado').textContent = resultado.toFixed(2) + 'x';
+    }
+}
+
+function aplicarFiltros() {
+    const desde = document.getElementById('fecha_desde').value;
+    const hasta = document.getElementById('fecha_hasta').value;
+
+    fetch(`/api/dashboard_data?desde=${desde}&hasta=${hasta}`)
+        .then(r => r.json())
+        .then(data => {
+            datos_dashboard = data;
+            actualizarDashboard();
+        });
+}
+
+function actualizarDashboard() {
+    const d = datos_dashboard;
+    const ingresos = d.total_ingresos || 0;
+    const gastos = d.total_pagos || 0;
+
+    // KPIs con discriminación
+    const ingresos_op = d.ingresos_operativos || 0;
+    const gastos_op = d.gastos_operativos || 0;
+    const gastos_banc = d.gastos_bancarios || 0;
+    const ganancia_real = ingresos_op - gastos_op - gastos_banc;
+
+    document.getElementById('kpi_ingresos').textContent = formatoContable(ingresos_op);
+    document.getElementById('kpi_gastos').textContent = formatoContable(gastos_op);
+    document.getElementById('kpi_gastos_bancarios').textContent = formatoContable(gastos_banc);
+    document.getElementById('kpi_ganancia').textContent = formatoContable(ganancia_real);
+    document.getElementById('kpi_ganancia').style.color = ganancia_real >= 0 ? '#00f5d4' : '#ff6b9d';
+
+    // Ganancia/Pérdida (sin FIMA ni gastos bancarios)
+    document.getElementById('ganancia_ingresos').textContent = formatoContable(ingresos_op);
+    document.getElementById('ganancia_gastos').textContent = formatoContable(gastos_op);
+    document.getElementById('ganancia_resultado').textContent = '$ ' + formatoContable(ganancia_real);
+    document.getElementById('ganancia_resultado').style.color = ganancia_real >= 0 ? '#00f5d4' : '#ff6b9d';
+
+    // Métricas adicionales (usando valores operativos)
+    const solvencia = gastos_op > 0 ? (ingresos_op / gastos_op) : 0;
+    const margen = ingresos_op > 0 ? ((ganancia_real) / ingresos_op * 100) : 0;
+    const gasto_diario = gastos_op > 30 ? (gastos_op / 30) : 0;
+    const dias_caja = gasto_diario > 0 ? Math.floor(ganancia_real / gasto_diario) : 0;
+
+    document.getElementById('metrica_solvencia').textContent = solvencia.toFixed(2);
+    document.getElementById('metrica_margen').textContent = margen.toFixed(1);
+    document.getElementById('metrica_dias_caja').textContent = dias_caja;
+
+    // Detalles
+    document.getElementById('detalle_transferencias').textContent = formatoContable(d.gastos_por_tipo?.Transferencia || 0);
+    document.getElementById('detalle_servicios').textContent = formatoContable(d.gastos_por_tipo?.['Servicios / Pagos Directos'] || 0);
+    document.getElementById('detalle_vep').textContent = formatoContable(d.gastos_por_tipo?.VEP || 0);
+    document.getElementById('detalle_cheques').textContent = formatoContable(d.gastos_por_tipo?.['Cheques / eCheqs'] || 0);
+    document.getElementById('detalle_efectivo').textContent = formatoContable(d.gastos_por_tipo?.Efectivo || 0);
+    document.getElementById('detalle_tarjeta').textContent = formatoContable(d.gastos_por_tipo?.Tarjeta || 0);
+
+    // Vencimientos
+    actualizarVencimientos(d.vencimientos || []);
+
+    // Gráficos
+    actualizarGraficos(d);
+}
+
+function actualizarVencimientos(vencimientos) {
+    const container = document.getElementById('listaVencimientos');
+
+    if (vencimientos.length === 0) {
+        container.innerHTML = '<p style="color: #8d99ae; text-align: center;">No hay vencimientos próximos</p>';
+        return;
+    }
+
+    container.innerHTML = vencimientos.map(v => `
+        <div style="padding: 12px; border-bottom: 1px solid #1e2139; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div style="color: white; font-weight: 600; margin-bottom: 4px;">${v.proveedor}</div>
+                <div style="color: #8d99ae; font-size: 0.8rem;">📅 ${v.fecha_vencimiento}</div>
+            </div>
+            <div style="color: #ffc107; font-weight: 700; font-size: 1.1rem;">$ ${formatoContable(v.monto)}</div>
+        </div>
+    `).join('');
+}
+
+function actualizarGraficos(d) {
+    const ctx1 = document.getElementById('chartEvolucion');
+    if (chartEvolucion) chartEvolucion.destroy();
+
+    chartEvolucion = new ApexCharts(ctx1, {
+        series: [
+            { name: 'Ingresos', data: d.evolucion_temporal?.ingresos || [] },
+            { name: 'Gastos', data: d.evolucion_temporal?.pagos || [] }
+        ],
+        chart: { type: 'area', height: 300, toolbar: { show: false } },
+        colors: ['#2ec4b6', '#ff6b9d'],
+        stroke: { curve: 'smooth', width: 2 },
+        fill: { type: 'gradient', gradient: { shadeIntensity: 0.3, opacityFrom: 0.7, opacityTo: 0.1 } },
+        xaxis: { categories: d.evolucion_temporal?.fechas || [], labels: { style: { colors: '#8d99ae', fontSize: '12px' } } },
+        yaxis: { labels: { style: { colors: '#8d99ae', fontSize: '12px' } } },
+        theme: { mode: 'dark' },
+        grid: { borderColor: '#1e2139' }
+    });
+    chartEvolucion.render();
+
+    const tipos = Object.keys(d.gastos_por_tipo || {});
+    const montos = Object.values(d.gastos_por_tipo || {});
+
+    const ctx2 = document.getElementById('chartDesglose');
+    if (chartDesglose) chartDesglose.destroy();
+
+    chartDesglose = new ApexCharts(ctx2, {
+        series: montos.length > 0 ? montos : [1],
+        labels: tipos.length > 0 ? tipos : ['Sin datos'],
+        chart: { type: 'donut', height: 300 },
+        colors: ['#4cc9f0', '#2ec4b6', '#00f5d4', '#ff6b9d', '#ffc107', '#a8dadc'],
+        plotOptions: { pie: { donut: { size: '75%', labels: { show: true, name: { show: false }, value: { show: true, fontSize: '14px', color: '#00f5d4', fontWeight: 700 } } } } },
+        theme: { mode: 'dark' },
+        stroke: { width: 2, colors: ['#121829'] }
+    });
+    chartDesglose.render();
+}
+</script>
+{% endblock %}

@@ -5113,5 +5113,157 @@ def obtener_bancos_sociedad(sociedad_id):
 
 
 
+@app.route('/dashboard_financiero', methods=['GET'])
+@login_required
+def dashboard_financiero():
+  return render_template('dashboard_financiero.html')
+
+
+@app.route('/api/sociedades', methods=['GET'])
+@login_required
+def api_sociedades():
+  sociedades = Sociedad.query.filter_by(empresa_id=current_user.empresa_id).all()
+  return jsonify([{'id': s.id, 'nombre': s.nombre} for s in sociedades])
+
+
+@app.route('/api/dashboard_data', methods=['GET'])
+@login_required
+def api_dashboard_data():
+  from datetime import datetime
+
+  desde_str = request.args.get('desde')
+  hasta_str = request.args.get('hasta')
+  tipo = request.args.get('tipo', '')
+
+  # Parsear fechas
+  try:
+    desde = datetime.strptime(desde_str, '%Y-%m-%d').date()
+    hasta = datetime.strptime(hasta_str, '%Y-%m-%d').date()
+  except:
+    desde = date.today() - timedelta(days=30)
+    hasta = date.today()
+
+  empresa_id = current_user.empresa_id
+
+  # Función helper para detectar tipo de movimiento
+  def es_fima(descripcion):
+    desc_lower = str(descripcion).lower()
+    return 'fima' in desc_lower
+
+  def es_gasto_bancario(descripcion):
+    desc_lower = str(descripcion).lower()
+    palabras_clave = ['ing. brutos', 'imp.', 'percep.', 'iva', 'comision']
+    return any(palabra in desc_lower for palabra in palabras_clave)
+
+  # INGRESOS OPERATIVOS: créditos - rescates FIMA
+  todos_creditos = db.session.query(MovimientoBancario).filter(
+    MovimientoBancario.empresa_id == empresa_id,
+    MovimientoBancario.tipo == 'credito',
+    MovimientoBancario.fecha >= desde,
+    MovimientoBancario.fecha <= hasta
+  ).all()
+
+  rescates_fima = sum(m.monto for m in todos_creditos if es_fima(m.descripcion))
+  ingresos_operativos = sum(m.monto for m in todos_creditos if not es_fima(m.descripcion))
+
+  # GASTOS OPERATIVOS: pagos realizados (facturas)
+  gastos_operativos = db.session.query(db.func.sum(FacturaPago.monto)).filter(
+    FacturaPago.empresa_id == empresa_id,
+    FacturaPago.estado == 'pagado',
+    FacturaPago.fecha_pago_programada >= desde,
+    FacturaPago.fecha_pago_programada <= hasta
+  ).scalar() or 0
+
+  # GASTOS BANCARIOS: movimientos con descripción de impuestos/comisiones
+  todos_debitos = db.session.query(MovimientoBancario).filter(
+    MovimientoBancario.empresa_id == empresa_id,
+    MovimientoBancario.tipo == 'debito',
+    MovimientoBancario.fecha >= desde,
+    MovimientoBancario.fecha <= hasta
+  ).all()
+
+  gastos_bancarios = sum(abs(m.monto) for m in todos_debitos if es_gasto_bancario(m.descripcion))
+  suscripciones_fima = sum(abs(m.monto) for m in todos_debitos if es_fima(m.descripcion))
+
+  # TOTALES PARA COMPATIBILIDAD
+  ingresos = ingresos_operativos + rescates_fima
+  pagos = gastos_operativos + gastos_bancarios
+
+  # VENCIMIENTOS PENDIENTES: facturas sin pagar con vencimiento en el futuro
+  vencimientos = db.session.query(db.func.sum(FacturaPago.monto)).filter(
+    FacturaPago.empresa_id == empresa_id,
+    FacturaPago.estado == 'sin_pagar',
+    FacturaPago.fecha_vencimiento > date.today()
+  ).scalar() or 0
+
+  # DESGLOSE POR TIPO DE PAGO
+  gastos_por_tipo = {}
+  tipos_pago = db.session.query(
+    FacturaPago.forma_pago,
+    db.func.sum(FacturaPago.monto)
+  ).filter(
+    FacturaPago.empresa_id == empresa_id,
+    FacturaPago.estado == 'pagado',
+    FacturaPago.fecha_pago_programada >= desde,
+    FacturaPago.fecha_pago_programada <= hasta
+  ).group_by(FacturaPago.forma_pago).all()
+
+  for tipo_pago, monto in tipos_pago:
+    gastos_por_tipo[tipo_pago] = float(monto) if monto else 0
+
+  # VENCIMIENTOS PRÓXIMOS (próximos 30 días)
+  vencimientos_proximos = db.session.query(FacturaPago).filter(
+    FacturaPago.empresa_id == empresa_id,
+    FacturaPago.estado == 'sin_pagar',
+    FacturaPago.fecha_vencimiento > date.today(),
+    FacturaPago.fecha_vencimiento <= date.today() + timedelta(days=30)
+  ).order_by(FacturaPago.fecha_vencimiento).limit(10).all()
+
+  vencimientos_list = []
+  for v in vencimientos_proximos:
+    proveedor = Proveedor.query.get(v.proveedor_id)
+    vencimientos_list.append({
+      'proveedor': proveedor.nombre if proveedor else 'N/A',
+      'monto': v.monto,
+      'fecha_vencimiento': v.fecha_vencimiento.strftime('%d/%m/%Y')
+    })
+
+  # EVOLUCIÓN TEMPORAL (últimos 15 días)
+  evolucion_temporal = {'fechas': [], 'ingresos': [], 'pagos': []}
+  for i in range(15, -1, -1):
+    fecha = date.today() - timedelta(days=i)
+
+    ing = db.session.query(db.func.sum(MovimientoBancario.monto)).filter(
+      MovimientoBancario.empresa_id == empresa_id,
+      MovimientoBancario.tipo == 'credito',
+      MovimientoBancario.fecha == fecha
+    ).scalar() or 0
+
+    pag = db.session.query(db.func.sum(FacturaPago.monto)).filter(
+      FacturaPago.empresa_id == empresa_id,
+      FacturaPago.estado == 'pagado',
+      FacturaPago.fecha_pago_programada == fecha
+    ).scalar() or 0
+
+    evolucion_temporal['fechas'].append(fecha.strftime('%d/%m'))
+    evolucion_temporal['ingresos'].append(float(ing))
+    evolucion_temporal['pagos'].append(float(pag))
+
+  return jsonify({
+    'total_ingresos': float(ingresos),
+    'ingresos_operativos': float(ingresos_operativos),
+    'rescates_fima': float(rescates_fima),
+    'total_pagos': float(pagos),
+    'gastos_operativos': float(gastos_operativos),
+    'gastos_bancarios': float(gastos_bancarios),
+    'suscripciones_fima': float(suscripciones_fima),
+    'total_vencimientos': float(vencimientos),
+    'gastos_por_tipo': gastos_por_tipo,
+    'vencimientos': vencimientos_list,
+    'evolucion_temporal': evolucion_temporal,
+    'ganancia_operativa': float(ingresos_operativos - gastos_operativos)
+  })
+
+
 if __name__ == '__main__':
   app.run(debug=True, port=5000)
